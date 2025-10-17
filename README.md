@@ -46,13 +46,14 @@ This tool supports both **single image conversion** and **batch processing**, wi
 ## Folder Structure
 
 image-to-svg-converter
-├── index.html
-├── app.js
-├── imagetracer_v1.2.6.js
-├── quality-validator.js
-├── styles.css (optional)
-├── assets/
-└── README.md
+|-- index.html
+|-- app.js
+|-- imagetracer_v1.2.6.js
+|-- quality-validator.js
+|-- styles.css (optional)
+|-- assets/
+`-- README.md
+
 
 ---
 
@@ -62,7 +63,6 @@ image-to-svg-converter
 ```bash
 git clone https://github.com/YOUR_USERNAME/image-to-svg-converter.git
 cd image-to-svg-converter
-
 2. Run Locally
 
 No build tools required. Just open index.html in your browser.
