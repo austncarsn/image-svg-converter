@@ -44,15 +44,18 @@ This tool supports both **single image conversion** and **batch processing**, wi
 ---
 
 ## Folder Structure
+
 image-to-svg-converter
 │── index.html
 │── app.js
 │── imagetracer_v1.2.6.js
 │── quality-validator.js
-│── styles.css (optional if separated)
+│── styles.css (optional)
 │── assets/
 └── README.md
 
+text
+undefined
 
 ---
 
