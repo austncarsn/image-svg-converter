@@ -42,7 +42,6 @@ This tool supports both **single image conversion** and **batch processing**, wi
 | Accessibility | ARIA roles + keyboard support |
 
 ---
-
 ## Folder Structure
 
 image-to-svg-converter/
