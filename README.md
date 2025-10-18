@@ -63,3 +63,9 @@ image-to-svg-converter/
 ```bash
 git clone https://github.com/YOUR_USERNAME/image-to-svg-converter.git
 cd image-to-svg-converter
+```
+
+### 2. Run Locally
+No build tools or installs required. Just open the `index.html` file in your browser.
+
+
