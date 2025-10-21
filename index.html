@@ -3,9 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Convert PNG/JPG/BMP/TIFF images to clean, scalable SVGs with adjustable vectorization settings and live previews.">
-  <meta name="theme-color" content="#517c96">
-  <meta name="color-scheme" content="light">
   <title>Image to SVG Converter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,9 +10,6 @@
   <!-- TIFF.js for TIFF format support -->
   <script src="https://cdn.jsdelivr.net/npm/tiff.js@0.4.0/dist/tiff.min.js"></script>
   <style>
-    :root {
-      color-scheme: light;
-    }
     /* 
     ============================================
     TYPOGRAPHY HIERARCHY
@@ -57,7 +51,6 @@
       position: sticky;
       top: 0;
       z-index: 100;
-      -webkit-backdrop-filter: blur(8px);
       backdrop-filter: blur(8px);
       background: rgba(255, 255, 255, 0.95);
       overflow: hidden;
@@ -81,7 +74,7 @@
       height: 40px;
       color: #517c96;
       transition: all 0.3s ease;
-      /* Decorative only; kept non-interactive (no handlers). Allow pointer events so hover styles work. */
+      pointer-events: none; /* Not clickable - decorative only */
     }
     
     .nav-icon:hover {
@@ -258,42 +251,6 @@
     .preset-icon {
       font-size: 18px;
     }
-
-    /* Custom preset delete chip */
-    .preset-delete {
-      margin-left: 4px;
-      border: none;
-      background: transparent;
-      color: #b91c1c;
-      cursor: pointer;
-      font-size: 14px;
-      line-height: 1;
-      padding: 2px 4px;
-      border-radius: 4px;
-    }
-    .preset-delete:hover {
-      background: rgba(185, 28, 28, 0.08);
-    }
-    .preset-delete:focus-visible {
-      outline: 2px solid rgba(185, 28, 28, 0.5);
-      outline-offset: 2px;
-    }
-
-    /* Compact custom preset select */
-    .preset-select {
-      padding: 10px 12px;
-      border: 1px solid #E8E6E3;
-      border-radius: 6px;
-      background: #fff;
-      font-family: 'Inter', sans-serif;
-      font-size: 14px;
-      color: #2A3236;
-    }
-    .preset-select-group {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
     
     /* Settings Panel */
     .settings-panel {
@@ -453,17 +410,6 @@
       cursor: pointer;
       transition: all 0.2s ease;
     }
-
-    /* Accessible focus styles */
-    #drop-zone:focus-visible,
-    .preset-btn:focus-visible,
-    .zoom-btn:focus-visible,
-    .download-btn:focus-visible,
-    .toggle-switch input:focus-visible + .toggle-slider {
-      outline: 3px solid rgba(81, 124, 150, 0.5);
-      outline-offset: 2px;
-      box-shadow: 0 0 0 2px rgba(81, 124, 150, 0.2);
-    }
     
     input[type="range"]:hover {
       background: linear-gradient(to right, #517c96 0%, #517c96 var(--value), #D8D3CC var(--value), #D8D3CC 100%);
@@ -556,36 +502,6 @@
     .toggle-switch input:checked:hover + .toggle-slider {
       background: #6B9AB8;
     }
-
-    /* Screen-reader only utility */
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
-
-    /* Skip link */
-    .skip-link {
-      position: absolute;
-      top: -40px;
-      left: 16px;
-      background: #517c96;
-      color: #fff;
-      padding: 8px 12px;
-      border-radius: 6px;
-      text-decoration: none;
-      transition: top 0.2s ease;
-      z-index: 1000;
-    }
-    .skip-link:focus {
-      top: 8px;
-    }
     
     /* Preview Container */
     .preview-section {
@@ -671,7 +587,6 @@
     
     .preview-content.zoomable {
       cursor: grab;
-      touch-action: none; /* allow custom pan/zoom without browser gestures */
     }
     
     .preview-content.zoomable:active {
@@ -685,13 +600,6 @@
       object-fit: contain;
       transition: transform 0.2s ease;
       pointer-events: none;
-      image-rendering: auto;
-    }
-
-    /* Prefer high-quality rendering for vectors */
-    .preview-content svg {
-      shape-rendering: geometricPrecision;
-      text-rendering: geometricPrecision;
     }
     
     .preview-placeholder {
@@ -734,15 +642,6 @@
       font-size: 14px;
       font-weight: 500; /* Medium - Status text */
       opacity: 0.7;
-    }
-
-    /* Reduce motion for accessibility */
-    @media (prefers-reduced-motion: reduce) {
-      * {
-        animation: none !important;
-        transition: none !important;
-        scroll-behavior: auto !important;
-      }
     }
     
     /* Batch Queue */
@@ -1141,9 +1040,8 @@
   </style>
 </head>
 <body>
-  <a href="#app" class="skip-link">Skip to main content</a>
   <!-- Top Navigation -->
-  <nav class="top-nav" aria-hidden="true">
+  <nav class="top-nav">
     <div class="nav-container">
       <!-- Star -->
       <div class="nav-icon">
@@ -1240,10 +1138,7 @@
   </nav>
 
   <!-- Main App -->
-  <main id="app" role="main">
-    <noscript>
-      <div class="quality-warning" role="alert">JavaScript is required for the Image to SVG Converter to function. Please enable JavaScript and reload.</div>
-    </noscript>
+  <div id="app">
     <!-- Page Header -->
     <div class="page-header">
       <h1>Image to SVG Converter</h1>
@@ -1251,14 +1146,14 @@
     </div>
     
     <!-- Drop Zone -->
-  <div id="drop-zone" role="button" tabindex="0" aria-controls="file-input" aria-label="Upload images by dropping here or press Enter to browse" aria-describedby="drop-hint">
+    <div id="drop-zone">
       <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
         <polyline points="17 8 12 3 7 8"></polyline>
         <line x1="12" y1="3" x2="12" y2="15"></line>
       </svg>
       <div class="drop-text">Drop your image here</div>
-  <div class="drop-hint" id="drop-hint">or click to browse • PNG, JPG, BMP, TIFF supported • Multiple files allowed</div>
+      <div class="drop-hint">or click to browse • PNG, JPG, BMP, TIFF supported • Multiple files allowed</div>
     </div>
     
     <input type="file" id="file-input" accept="image/png,image/jpeg,image/bmp,image/tiff,image/tif" multiple hidden>
@@ -1266,34 +1161,126 @@
     <!-- Presets Section -->
     <div class="presets-section">
       <div class="section-label">Quick Presets</div>
-      <div class="presets-container" id="presets-container">
-        <button class="preset-btn" type="button" data-preset="logo">
+      <div class="presets-container">
+        <button class="preset-btn" data-preset="logo">
           <span class="preset-icon">✦</span> Logo
         </button>
-        <button class="preset-btn" type="button" data-preset="photo">
+        <button class="preset-btn" data-preset="photo">
           <span class="preset-icon">◉</span> Photo
         </button>
-        <button class="preset-btn" type="button" data-preset="drawing">
+        <button class="preset-btn" data-preset="drawing">
           <span class="preset-icon">✎</span> Drawing
-        </button>
-        <button class="preset-btn" type="button" data-preset="lineart">
-          <span class="preset-icon">🖊️</span> Line Art
-        </button>
-        <button class="preset-btn" type="button" data-action="reset">
-          <span class="preset-icon">↺</span> Reset Defaults
-        </button>
-        <button class="preset-btn" type="button" data-action="save">
-          <span class="preset-icon">💾</span> Save Preset
         </button>
       </div>
     </div>
     
-    
+    <!-- Settings Panel -->
+    <div class="settings-panel">
+      <div class="settings-header">
+        <h3>Vectorization Settings</h3>
+        <p class="settings-description">Fine-tune the conversion parameters for optimal results</p>
+        <div class="quality-toggle">
+          <label>
+            <input type="checkbox" id="high-quality" checked>
+            <span>High Quality Mode</span>
+          </label>
+          <span class="quality-badge">Enhanced</span>
+        </div>
+      </div>
+      <div class="settings-grid">
+                <div class="setting-item">
+          <label>
+            <span class="setting-name">
+              Number of Colors
+              <span class="tooltip-icon" data-tooltip="Fewer colors = simpler, more colors = detailed">?</span>
+            </span>
+            <span class="setting-value" id="colors-value">16</span>
+          </label>
+          <input type="range" id="numberofcolors" min="2" max="32" value="16">
+        </div>
+        <div class="setting-item">
+          <label>
+            <span class="setting-name">
+              Line Smoothness
+              <span class="tooltip-icon" data-tooltip="Higher = smoother lines (1 = preserve detail)">?</span>
+            </span>
+            <span class="setting-value" id="ltres-value">1.0</span>
+          </label>
+          <input type="range" id="ltres" min="0" max="20" step="1" value="1">
+        </div>
+        <div class="setting-item">
+          <label>
+            <span class="setting-name">
+              Curve Smoothness
+              <span class="tooltip-icon" data-tooltip="Higher = smoother curves (1 = preserve detail)">?</span>
+            </span>
+            <span class="setting-value" id="qtres-value">1.0</span>
+          </label>
+          <input type="range" id="qtres" min="0" max="20" step="1" value="1">
+        </div>
+        <div class="setting-item">
+          <label>
+            <span class="setting-name">
+              Detail Filter
+              <span class="tooltip-icon" data-tooltip="Remove noise and artifacts (8 = minimal)">?</span>
+            </span>
+            <span class="setting-value" id="pathomit-value">8</span>
+          </label>
+          <input type="range" id="pathomit" min="0" max="100" value="8">
+        </div>
+        <div class="setting-item">
+          <label>
+            <span class="setting-name">
+              Edge Smoothing
+              <span class="tooltip-icon" data-tooltip="Blur before tracing (1 = minimal blur)">?</span>
+            </span>
+            <span class="setting-value" id="blurradius-value">1</span>
+          </label>
+          <input type="range" id="blurradius" min="0" max="20" step="1" value="1">
+        </div>
+        <div class="setting-item">
+          <label>
+            <span class="setting-name">
+              Scale
+              <span class="tooltip-icon" data-tooltip="Output size multiplier (1.0 = original size)">?</span>
+            </span>
+            <span class="setting-value" id="scale-value">1.0</span>
+          </label>
+          <input type="range" id="scale" min="0.5" max="3" step="0.1" value="1">
+        </div>
+        <div class="setting-item">
+          <label>
+            <span class="setting-name">
+              Path Optimization
+              <span class="tooltip-icon" data-tooltip="Smooth and perfect vector lines">?</span>
+            </span>
+            <span class="setting-value" id="optimize-value">On</span>
+          </label>
+          <div class="toggle-switch">
+            <input type="checkbox" id="path-optimize" checked>
+            <span class="toggle-slider"></span>
+          </div>
+        </div>
+        <div class="setting-item">
+          <label>
+            <span class="setting-name">
+              Outline Mode
+              <span class="tooltip-icon" data-tooltip="Convert filled shapes to stroked outlines (best for line art)">?</span>
+            </span>
+            <span class="setting-value" id="outline-value">Auto</span>
+          </label>
+          <div class="toggle-switch">
+            <input type="checkbox" id="outline-mode" checked>
+            <span class="toggle-slider"></span>
+          </div>
+        </div>
+      </div>
+    </div>
     
     <!-- Batch Processing Queue -->
     <div class="batch-queue hidden" id="batch-queue">
       <div class="section-label">Processing Queue</div>
-      <div class="queue-list" id="queue-list" aria-live="polite" aria-relevant="additions removals text"></div>
+      <div class="queue-list" id="queue-list"></div>
     </div>
     
     <!-- Quality Analysis Report -->
@@ -1317,10 +1304,10 @@
             </div>
           </div>
         </div>
-        <div class="quality-recommendation" id="quality-recommendation" aria-live="polite">
+        <div class="quality-recommendation" id="quality-recommendation">
           Analyzing quality...
         </div>
-        <div class="quality-warning hidden" id="quality-warning" role="alert">
+        <div class="quality-warning hidden" id="quality-warning">
           ⚠️ <strong>Not Pixel-Perfect:</strong> This conversion is an approximation. True vectorization cannot be pixel-perfect for complex images.
         </div>
       </div>
@@ -1346,7 +1333,7 @@
           <span class="complexity-label">Vectorizable:</span>
           <span class="complexity-value" id="complexity-vectorizable">—</span>
         </div>
-        <div class="complexity-recommendation" id="complexity-recommendation" aria-live="polite">
+        <div class="complexity-recommendation" id="complexity-recommendation">
           Upload an image to analyze...
         </div>
       </div>
@@ -1387,144 +1374,41 @@
     <div class="preview-section">
       <div class="section-label">Preview</div>
       <div class="preview-container">
-        <div class="preview-box" role="region" aria-label="Original image preview">
+        <div class="preview-box">
           <div class="preview-header">
             <h4>Original Image</h4>
             <div class="zoom-controls hidden" id="original-zoom-controls">
-              <button class="zoom-btn" type="button" data-target="original" data-action="out" aria-label="Zoom out original">−</button>
+              <button class="zoom-btn" data-target="original" data-action="out">−</button>
               <span class="zoom-level" id="original-zoom-level">100%</span>
-              <button class="zoom-btn" type="button" data-target="original" data-action="in" aria-label="Zoom in original">+</button>
-              <button class="zoom-btn" type="button" data-target="original" data-action="reset" aria-label="Reset zoom original">⟲</button>
+              <button class="zoom-btn" data-target="original" data-action="in">+</button>
+              <button class="zoom-btn" data-target="original" data-action="reset">⟲</button>
             </div>
           </div>
           <div class="preview-content zoomable" id="original-preview" data-zoom="1" data-pan-x="0" data-pan-y="0">
             <div class="preview-placeholder">Upload an image to begin</div>
           </div>
         </div>
-        <div class="preview-box" role="region" aria-label="SVG result preview">
+        <div class="preview-box">
           <div class="preview-header">
             <h4>SVG Result</h4>
             <div class="zoom-controls hidden" id="svg-zoom-controls">
-              <button class="zoom-btn" type="button" data-target="svg" data-action="out" aria-label="Zoom out SVG">−</button>
+              <button class="zoom-btn" data-target="svg" data-action="out">−</button>
               <span class="zoom-level" id="svg-zoom-level">100%</span>
-              <button class="zoom-btn" type="button" data-target="svg" data-action="in" aria-label="Zoom in SVG">+</button>
-              <button class="zoom-btn" type="button" data-target="svg" data-action="reset" aria-label="Reset zoom SVG">⟲</button>
+              <button class="zoom-btn" data-target="svg" data-action="in">+</button>
+              <button class="zoom-btn" data-target="svg" data-action="reset">⟲</button>
             </div>
           </div>
-          <div class="preview-content zoomable" id="svg-preview" data-zoom="1" data-pan-x="0" data-pan-y="0" aria-live="polite">
+          <div class="preview-content zoomable" id="svg-preview" data-zoom="1" data-pan-x="0" data-pan-y="0">
             <div class="preview-placeholder">SVG will appear here</div>
           </div>
         </div>
       </div>
     </div>
     
-    <!-- Settings Panel (moved below Preview) -->
-    <div class="settings-panel">
-      <div class="settings-header">
-        <h3>Vectorization Settings</h3>
-        <p class="settings-description">Fine-tune the conversion parameters for optimal results</p>
-        <div class="quality-toggle">
-          <label>
-            <input type="checkbox" id="high-quality" checked>
-            <span>High Quality Mode</span>
-          </label>
-          <span class="quality-badge">Enhanced</span>
-        </div>
-      </div>
-      <div class="settings-grid">
-        <div class="setting-item">
-          <label>
-            <span class="setting-name">
-              Number of Colors
-              <span class="tooltip-icon" data-tooltip="Fewer colors = simpler, more colors = detailed">?</span>
-            </span>
-            <span class="setting-value" id="colors-value">4</span>
-          </label>
-          <input type="range" id="numberofcolors" min="2" max="32" value="4">
-        </div>
-        <div class="setting-item">
-          <label>
-            <span class="setting-name">
-              Line Smoothness
-              <span class="tooltip-icon" data-tooltip="Higher = smoother lines (1 = preserve detail)">?</span>
-            </span>
-            <span class="setting-value" id="ltres-value">8</span>
-          </label>
-          <input type="range" id="ltres" min="0" max="20" step="1" value="8">
-        </div>
-        <div class="setting-item">
-          <label>
-            <span class="setting-name">
-              Curve Smoothness
-              <span class="tooltip-icon" data-tooltip="Higher = smoother curves (1 = preserve detail)">?</span>
-            </span>
-            <span class="setting-value" id="qtres-value">8</span>
-          </label>
-          <input type="range" id="qtres" min="0" max="20" step="1" value="8">
-        </div>
-        <div class="setting-item">
-          <label>
-            <span class="setting-name">
-              Detail Filter
-              <span class="tooltip-icon" data-tooltip="Remove noise and artifacts (8 = minimal)">?</span>
-            </span>
-            <span class="setting-value" id="pathomit-value">15</span>
-          </label>
-          <input type="range" id="pathomit" min="0" max="100" value="15">
-        </div>
-        <div class="setting-item">
-          <label>
-            <span class="setting-name">
-              Edge Smoothing
-              <span class="tooltip-icon" data-tooltip="Blur before tracing (1 = minimal blur)">?</span>
-            </span>
-            <span class="setting-value" id="blurradius-value">0</span>
-          </label>
-          <input type="range" id="blurradius" min="0" max="20" step="1" value="0">
-        </div>
-        <div class="setting-item">
-          <label>
-            <span class="setting-name">
-              Scale
-              <span class="tooltip-icon" data-tooltip="Output size multiplier (1.0 = original size)">?</span>
-            </span>
-            <span class="setting-value" id="scale-value">1.0</span>
-          </label>
-          <input type="range" id="scale" min="0.5" max="3" step="0.1" value="1">
-        </div>
-        <div class="setting-item">
-          <label>
-            <span class="setting-name">
-              Path Optimization
-              <span class="tooltip-icon" data-tooltip="Smooth and perfect vector lines">?</span>
-            </span>
-            <span class="setting-value" id="optimize-value">On</span>
-          </label>
-          <div class="toggle-switch">
-            <input type="checkbox" id="path-optimize" checked>
-            <span class="toggle-slider"></span>
-          </div>
-        </div>
-        <div class="setting-item">
-          <label>
-            <span class="setting-name">
-              Outline Mode
-              <span class="tooltip-icon" data-tooltip="Convert filled shapes to stroked outlines (best for line art)">?</span>
-            </span>
-            <span class="setting-value" id="outline-value">Auto</span>
-          </label>
-          <div class="toggle-switch">
-            <input type="checkbox" id="outline-mode" checked>
-            <span class="toggle-slider"></span>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Download Section -->
     <div class="download-section">
       <div class="download-options hidden" id="download-options">
-        <button id="download-vector-btn" class="download-btn" type="button">
+        <button id="download-vector-btn" class="download-btn">
           <svg class="download-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
@@ -1532,7 +1416,7 @@
           </svg>
           Vector Only
         </button>
-        <button id="download-embedded-btn" class="download-btn download-btn-alt" type="button">
+        <button id="download-embedded-btn" class="download-btn download-btn-alt">
           <svg class="download-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
             <circle cx="8.5" cy="8.5" r="1.5"></circle>
@@ -1540,7 +1424,7 @@
           </svg>
           Pixel-Perfect (Embedded)
         </button>
-        <button id="download-hybrid-btn" class="download-btn download-btn-alt hidden" type="button">
+        <button id="download-hybrid-btn" class="download-btn download-btn-alt hidden">
           <svg class="download-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2v20M2 12h20"></path>
           </svg>
@@ -1548,236 +1432,10 @@
         </button>
       </div>
     </div>
-  </main>
+  </div>
   
   <script src="imagetracer_v1.2.6.js"></script>
   <script src="quality-validator.js"></script>
   <script src="app.js"></script>
-  <script>
-    // Enhance keyboard accessibility for drop zone without interfering with app.js
-    (function(){
-      const dz = document.getElementById('drop-zone');
-      const input = document.getElementById('file-input');
-      if (dz && input) {
-        dz.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            input.click();
-          }
-        });
-      }
-    })();
-  </script>
-  <script>
-    // Preset wiring: applies recommended values and notifies existing listeners
-    (function(){
-      if (document.body.dataset.presetsInit) return;
-      document.body.dataset.presetsInit = '1';
-
-      const $ = (sel) => document.querySelector(sel);
-      const byId = (id) => document.getElementById(id);
-      const container = byId('presets-container');
-      const setRange = (id, value, labelId) => {
-        const el = byId(id);
-        if (!el) return;
-        el.value = String(value);
-        if (labelId) {
-          const lab = byId(labelId);
-          if (lab) lab.textContent = String(value);
-        }
-        // update CSS var for gradient if used
-        try {
-          const min = Number(el.min || 0), max = Number(el.max || 100), val = Number(el.value);
-          const pct = ((val - min) / (max - min)) * 100;
-          el.style.setProperty('--value', pct + '%');
-        } catch {}
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-      };
-      const setToggle = (id, checked, labelId) => {
-        const el = byId(id);
-        if (!el) return;
-        el.checked = !!checked;
-        if (labelId) {
-          const lab = byId(labelId);
-          if (lab) lab.textContent = el.checked ? 'On' : 'Off';
-        }
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-      };
-
-      const DEFAULTS = { colors: 4, ltres: 8, qtres: 8, pathomit: 15, blurradius: 0, scale: 1.0, optimize: true, outline: true };
-
-      const presets = {
-        logo:       { colors: 6,  ltres: 8,  qtres: 8,  pathomit: 12, blurradius: 0, scale: 1.0, optimize: true, outline: true },
-        photo:      { colors: 16, ltres: 2,  qtres: 2,  pathomit: 4,  blurradius: 1, scale: 1.0, optimize: true, outline: false },
-        drawing:    { colors: 6,  ltres: 8,  qtres: 8,  pathomit: 15, blurradius: 0, scale: 1.0, optimize: true, outline: true },
-        lineart:    { colors: 2,  ltres: 10, qtres: 10, pathomit: 20, blurradius: 0, scale: 1.0, optimize: true, outline: true },
-      };
-
-      const applyValues = (p) => {
-        setRange('numberofcolors', p.colors, 'colors-value');
-        setRange('ltres', p.ltres, 'ltres-value');
-        setRange('qtres', p.qtres, 'qtres-value');
-        setRange('pathomit', p.pathomit, 'pathomit-value');
-        setRange('blurradius', p.blurradius, 'blurradius-value');
-        setRange('scale', p.scale, 'scale-value');
-        setToggle('path-optimize', p.optimize, 'optimize-value');
-        setToggle('outline-mode', p.outline, 'outline-value');
-        // keep High Quality as-is; could toggle via setToggle('high-quality', ...)
-      };
-
-      const applyPreset = (name) => {
-        const p = (presets[name] || loadSaved()[name]);
-        if (!p) return;
-        applyValues(p);
-      };
-
-      // Custom presets via localStorage
-      const STORAGE_KEY = 'vectorizer_custom_presets_v1';
-      const loadSaved = () => {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
-      };
-      const saveAll = (obj) => localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
-      const upsertPreset = (name, values) => {
-        const all = loadSaved();
-        all[name] = values;
-        saveAll(all);
-      };
-      const removePreset = (name) => {
-        const all = loadSaved();
-        delete all[name];
-        saveAll(all);
-      };
-      const createPresetButton = (name) => {
-        if (!container) return;
-        // Remove existing with same name
-        const existing = container.querySelector(`.preset-btn[data-preset="${CSS.escape(name)}"]`);
-        if (existing) existing.remove();
-        const btn = document.createElement('button');
-        btn.className = 'preset-btn';
-        btn.type = 'button';
-        btn.setAttribute('data-preset', name);
-        btn.title = `Custom preset: ${name}`;
-        const icon = document.createElement('span');
-        icon.className = 'preset-icon';
-        icon.textContent = '★';
-        btn.appendChild(icon);
-        btn.appendChild(document.createTextNode(' ' + name));
-        // delete chip
-        const del = document.createElement('button');
-        del.type = 'button';
-        del.className = 'preset-delete';
-        del.title = `Delete preset: ${name}`;
-        del.setAttribute('aria-label', `Delete preset ${name}`);
-        del.textContent = '×';
-        del.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (confirm(`Delete preset "${name}"?`)) {
-            removePreset(name);
-            btn.remove();
-            renderSelect();
-          }
-        });
-        btn.appendChild(del);
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          applyPreset(name);
-        }, { passive: true });
-        container.appendChild(btn);
-      };
-      const renderSaved = () => {
-        const all = loadSaved();
-        Object.keys(all).forEach(createPresetButton);
-      };
-
-      // Compact dropdown when many custom presets exist
-      const renderSelect = () => {
-        const all = loadSaved();
-        let select = document.getElementById('preset-select');
-        if (!Object.keys(all).length) {
-          if (select) select.remove();
-          return;
-        }
-        if (!select) {
-          const group = document.createElement('span');
-          group.className = 'preset-select-group';
-          const label = document.createElement('label');
-          label.textContent = 'Custom:';
-          label.style.fontSize = '12px';
-          label.style.opacity = '0.7';
-          label.setAttribute('for', 'preset-select');
-          select = document.createElement('select');
-          select.className = 'preset-select';
-          select.id = 'preset-select';
-          group.appendChild(label);
-          group.appendChild(select);
-          // Append near the end of the container
-          container.appendChild(group);
-          select.addEventListener('change', () => {
-            const name = select.value;
-            if (!name) return;
-            applyPreset(name);
-            // Make corresponding button active if present
-            const btn = container.querySelector(`.preset-btn[data-preset="${CSS.escape(name)}"]`);
-            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-            if (btn) btn.classList.add('active');
-          });
-        }
-        // refresh options
-        select.innerHTML = '<option value="">Select…</option>';
-        Object.keys(all).sort().forEach(name => {
-          const opt = document.createElement('option');
-          opt.value = name;
-          opt.textContent = name;
-          select.appendChild(opt);
-        });
-      };
-
-      // Click handling with active state
-      document.querySelectorAll('.preset-btn[data-preset]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const name = btn.getAttribute('data-preset');
-          document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          applyPreset(name);
-        }, { passive: true });
-      });
-
-      // Action buttons: reset and save
-      if (container) {
-        container.addEventListener('click', (e) => {
-          const btn = e.target.closest('.preset-btn[data-action]');
-          if (!btn) return;
-          const action = btn.getAttribute('data-action');
-          if (action === 'reset') {
-            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-            applyValues(DEFAULTS);
-          } else if (action === 'save') {
-            const name = (prompt('Save current settings as preset name:', 'My Preset') || '').trim();
-            if (!name) return;
-            if (/[:]/.test(name)) { alert('Please avoid special characters like :'); return; }
-            const values = {
-              colors: Number(byId('numberofcolors')?.value || DEFAULTS.colors),
-              ltres: Number(byId('ltres')?.value || DEFAULTS.ltres),
-              qtres: Number(byId('qtres')?.value || DEFAULTS.qtres),
-              pathomit: Number(byId('pathomit')?.value || DEFAULTS.pathomit),
-              blurradius: Number(byId('blurradius')?.value || DEFAULTS.blurradius),
-              scale: Number(byId('scale')?.value || DEFAULTS.scale),
-              optimize: !!byId('path-optimize')?.checked,
-              outline: !!byId('outline-mode')?.checked,
-            };
-            upsertPreset(name, values);
-            createPresetButton(name);
-          }
-        });
-      }
-
-  // Render saved presets on load
-  renderSaved();
-  renderSelect();
-    })();
-  </script>
 </body>
 </html>
