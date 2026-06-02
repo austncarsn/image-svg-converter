@@ -173,11 +173,13 @@ import { createZipBlob } from "./zip-helper.js";
       colorsampling: 2,
     },
     drawing: {
-      colors: 12,
+      colors: 8,
       ltres: 3,
       qtres: 3,
       pathomit: 14,
       blurradius: 2,
+      blurdelta: 40,
+      mincolorratio: 0.025,
       scale: 1.0,
       optimize: true,
       outline: true,
@@ -1324,7 +1326,8 @@ import { createZipBlob } from "./zip-helper.js";
       // Photo preset overrides this to stochastic (2) via config.colorsampling.
       colorsampling: config.colorsampling !== undefined ? Number(config.colorsampling) : 1,
       colorquantcycles: hq ? 3 : 2,
-      mincolorratio: hq ? 0.01 : 0.02,
+      // Allow per-preset override; otherwise fall back to HQ-aware global default.
+      mincolorratio: config.mincolorratio !== undefined ? Number(config.mincolorratio) : (hq ? 0.01 : 0.02),
       layering: 0,
       linefilter: true,
       rightangleenhance: true,
