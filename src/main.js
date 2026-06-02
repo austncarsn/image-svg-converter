@@ -175,8 +175,8 @@ import { createZipBlob } from "./zip-helper.js";
       colors: 16,
       ltres: 3,
       qtres: 3,
-      pathomit: 10,
-      blurradius: 1,
+      pathomit: 14,
+      blurradius: 2,
       scale: 1.0,
       optimize: true,
       outline: true,
@@ -654,9 +654,9 @@ import { createZipBlob } from "./zip-helper.js";
 
     svgDoc.querySelectorAll("path").forEach((path) => {
       const d = path.getAttribute("d") || "";
-      // Count distinct path commands; fewer than 3 means the path has no meaningful shape
+      // Count distinct path commands; fewer than 5 means the path has no meaningful shape
       const commandCount = (d.match(/[MLHVCSQTAZ]/gi) || []).length;
-      if (commandCount < 3 || d === "M0 0") {
+      if (commandCount < 5 || d === "M0 0") {
         path.remove();
       }
     });
@@ -1277,7 +1277,10 @@ import { createZipBlob } from "./zip-helper.js";
         type = "lineart";
       } else if (uniqueColors <= 34 && (transparentRatio > 0.08 || edgeDensity > 0.16)) {
         type = "logo";
-      } else if (uniqueColors > 70 || avgSaturation < 0.18) {
+      } else if ((uniqueColors > 70 || avgSaturation < 0.18) && edgeDensity < 0.13) {
+        // Classify as photo only if it also has low edge density (smooth photographic gradients).
+        // Illustrated or engraved assets with many JPEG-compression colors but crisp ink edges
+        // have high edgeDensity and should route to "drawing" instead.
         type = "photo";
       }
 

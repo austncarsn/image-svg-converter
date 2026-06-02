@@ -1,4 +1,4 @@
-/* 
+/*
 ============================================
 MODERN CSS STYLING Overhaul - 2026 Standards
 - Native Nesting
@@ -25,7 +25,7 @@ MODERN CSS STYLING Overhaul - 2026 Standards
   --text-color: light-dark(#262c2f, #f1f5f9);
   --text-muted: light-dark(#6b7280, #94a3b8);
   --border-color: light-dark(#e6e3df, #262a2e);
-  
+
   --success-color: #22c55e;
   --success-bg: light-dark(rgba(34, 197, 94, 0.08), rgba(34, 197, 94, 0.15));
   --warning-color: #f59e0b;
@@ -88,13 +88,21 @@ html {
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   background: var(--bg-color);
   color: var(--text-color);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   line-height: 1.5;
-  transition: background-color 0.3s, color 0.3s;
+  transition:
+    background-color 0.3s,
+    color 0.3s;
 }
 
 /* Glassmorphism Navigation */
@@ -458,7 +466,9 @@ body {
   backdrop-filter: blur(var(--backdrop-blur));
   -webkit-backdrop-filter: blur(var(--backdrop-blur));
   border: 1px solid var(--glass-border);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 
   &:hover {
     border-color: var(--card-hover-border);
@@ -509,7 +519,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  
+
   label {
     display: flex;
     justify-content: space-between;
@@ -615,7 +625,7 @@ input[type="range"] {
     right: 0;
     bottom: 0;
     background-color: var(--border-color);
-    transition: .2s;
+    transition: 0.2s;
     border-radius: 22px;
 
     &:before {
@@ -626,7 +636,7 @@ input[type="range"] {
       left: 3px;
       bottom: 3px;
       background-color: white;
-      transition: .2s;
+      transition: 0.2s;
       border-radius: 50%;
       box-shadow: var(--shadow-sm);
     }
@@ -720,8 +730,9 @@ input[type="range"] {
   overflow: hidden;
   position: relative;
   user-select: none;
-  
-  img, svg {
+
+  img,
+  svg {
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
@@ -792,7 +803,7 @@ input[type="range"] {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
-  
+
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
   }
@@ -837,24 +848,34 @@ input[type="range"] {
     font-weight: 800;
     color: #ffffff;
     background: linear-gradient(135deg, #9ca3af, #6b7280);
-    box-shadow: 0 0 0 4px var(--border-color), var(--shadow-sm);
+    box-shadow:
+      0 0 0 4px var(--border-color),
+      var(--shadow-sm);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    
+
     &.excellent {
       background: linear-gradient(135deg, #10b981, #059669);
-      box-shadow: 0 0 12px rgba(16, 185, 129, 0.4), 0 0 0 4px rgba(16, 185, 129, 0.1);
+      box-shadow:
+        0 0 12px rgba(16, 185, 129, 0.4),
+        0 0 0 4px rgba(16, 185, 129, 0.1);
     }
     &.good {
       background: linear-gradient(135deg, #3b82f6, #2563eb);
-      box-shadow: 0 0 12px rgba(59, 130, 246, 0.4), 0 0 0 4px rgba(59, 130, 246, 0.1);
+      box-shadow:
+        0 0 12px rgba(59, 130, 246, 0.4),
+        0 0 0 4px rgba(59, 130, 246, 0.1);
     }
     &.fair {
       background: linear-gradient(135deg, #f59e0b, #d97706);
-      box-shadow: 0 0 12px rgba(245, 158, 11, 0.4), 0 0 0 4px rgba(245, 158, 11, 0.1);
+      box-shadow:
+        0 0 12px rgba(245, 158, 11, 0.4),
+        0 0 0 4px rgba(245, 158, 11, 0.1);
     }
     &.poor {
       background: linear-gradient(135deg, #ef4444, #dc2626);
-      box-shadow: 0 0 12px rgba(239, 68, 68, 0.4), 0 0 0 4px rgba(239, 68, 68, 0.1);
+      box-shadow:
+        0 0 12px rgba(239, 68, 68, 0.4),
+        0 0 0 4px rgba(239, 68, 68, 0.1);
     }
   }
 
@@ -902,7 +923,7 @@ input[type="range"] {
   flex-direction: column;
   gap: 4px;
   transition: all 0.2s ease;
-  
+
   &:hover {
     border-color: var(--card-hover-border);
   }
@@ -942,7 +963,7 @@ input[type="range"] {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 0.85rem;
-  
+
   &.processing {
     border-color: var(--primary-color);
     background: var(--accent-badge);
@@ -984,13 +1005,60 @@ input[type="range"] {
   }
 }
 
-/* Downloads Actions */
-.download-section {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
+/* Export Card */
+.export-card {
   margin-top: 12px;
+}
+
+.export-card-header {
+  margin-bottom: 16px;
+}
+
+.export-card-header .card-title {
+  margin-bottom: 4px;
+}
+
+.export-format-label {
+  font-size: 0.775rem;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+
+.export-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 12px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.export-empty-icon {
+  width: 24px;
+  height: 24px;
+  opacity: 0.35;
+}
+
+.export-card:has(.download-options:not(.hidden)) .export-empty-state {
+  display: none;
+}
+
+.download-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.download-options .btn {
+  justify-content: center;
+  width: 100%;
+}
+
+.btn-export-primary {
+  padding-block: 12px;
+  font-size: 0.9rem;
 }
 
 .btn {
@@ -1122,10 +1190,6 @@ input[type="range"] {
   .comparison-toolbar {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .download-options {
-    width: 100%;
   }
 
   .download-options .btn {
