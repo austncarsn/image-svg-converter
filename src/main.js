@@ -170,9 +170,10 @@ import { createZipBlob } from "./zip-helper.js";
       optimize: true,
       outline: false,
       highQuality: true,
+      colorsampling: 2,
     },
     drawing: {
-      colors: 16,
+      colors: 12,
       ltres: 3,
       qtres: 3,
       pathomit: 14,
@@ -654,9 +655,9 @@ import { createZipBlob } from "./zip-helper.js";
 
     svgDoc.querySelectorAll("path").forEach((path) => {
       const d = path.getAttribute("d") || "";
-      // Count distinct path commands; fewer than 5 means the path has no meaningful shape
+      // Count distinct path commands; fewer than 8 means the path has no meaningful shape
       const commandCount = (d.match(/[MLHVCSQTAZ]/gi) || []).length;
-      if (commandCount < 5 || d === "M0 0") {
+      if (commandCount < 8 || d === "M0 0") {
         path.remove();
       }
     });
@@ -1319,9 +1320,11 @@ import { createZipBlob } from "./zip-helper.js";
       scale: Number(config.scale),
       optimize: !!config.optimize,
       outline: !!config.outline,
-      colorsampling: 2,
-      colorquantcycles: hq ? 5 : 2,
-      mincolorratio: hq ? 0.002 : 0.01,
+      // Use image-based color sampling by default (fewer spurious color clusters).
+      // Photo preset overrides this to stochastic (2) via config.colorsampling.
+      colorsampling: config.colorsampling !== undefined ? Number(config.colorsampling) : 1,
+      colorquantcycles: hq ? 3 : 2,
+      mincolorratio: hq ? 0.01 : 0.02,
       layering: 0,
       linefilter: true,
       rightangleenhance: true,
@@ -1329,8 +1332,8 @@ import { createZipBlob } from "./zip-helper.js";
       desc: false,
       viewbox: true,
       strokewidth: 0,
-      lcpr: hq ? 0.5 : 0,
-      qcpr: hq ? 0.5 : 0,
+      lcpr: 0,
+      qcpr: 0,
     };
   }
 
