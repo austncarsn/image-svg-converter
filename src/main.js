@@ -748,7 +748,8 @@ import { createZipBlob } from "./zip-helper.js";
     const parseError = doc.querySelector("parsererror");
 
     if (parseError || !svg || svg.nodeName.toLowerCase() !== "svg") {
-      return String(svgString).replace(/>\s+</g, "><").trim();
+      // Do not return raw input on parse failure — it has not been sanitized.
+      return "";
     }
 
     doc.querySelectorAll("script, foreignObject, iframe, object, embed").forEach((n) => n.remove());
@@ -759,7 +760,7 @@ import { createZipBlob } from "./zip-helper.js";
         if (/^on/i.test(attr)) node.removeAttribute(attr);
         if (
           (attr === "href" || attr === "xlink:href") &&
-          /^\s*(https?:|data:|javascript:)/i.test(value)
+          /^\s*(https?:|data:|javascript:|vbscript:|\/\/)/i.test(value)
         ) {
           node.removeAttribute(attr);
         }
@@ -767,6 +768,15 @@ import { createZipBlob } from "./zip-helper.js";
     });
 
     doc.querySelectorAll("metadata").forEach((n) => n.remove());
+
+    // feImage can load external resources via href/xlink:href inside filters.
+    // ImageTracer never produces these; remove all external references.
+    doc.querySelectorAll("feImage").forEach((n) => {
+      n.removeAttribute("href");
+      n.removeAttribute("xlink:href");
+      n.removeAttribute("externalResourcesRequired");
+    });
+
     ensureSvgViewBox(svg);
 
     const referencedIds = collectReferencedIds(svg);
@@ -827,17 +837,14 @@ import { createZipBlob } from "./zip-helper.js";
 
     // Wrap every remaining artwork child (everything that isn't <defs>) in a
     // named layer group so downstream tools can target the artwork cleanly.
-    const artworkNodes = [...svg.children].filter(
-      (n) => n.tagName.toLowerCase() !== "defs"
-    );
+    const artworkNodes = [...svg.children].filter((n) => n.tagName.toLowerCase() !== "defs");
     const artworkGroup = doc.createElementNS("http://www.w3.org/2000/svg", "g");
     artworkGroup.setAttribute("data-layer", "artwork");
     artworkGroup.setAttribute("fill", "none");
     artworkNodes.forEach((n) => artworkGroup.appendChild(n));
 
     // Build the <defs> element (empty when ImageTracer produces no gradients/clips).
-    const defsEl =
-      existingDefs || doc.createElementNS("http://www.w3.org/2000/svg", "defs");
+    const defsEl = existingDefs || doc.createElementNS("http://www.w3.org/2000/svg", "defs");
 
     // Clear svg and re-insert children in canonical order:
     //   <title> → <desc> → <defs> → <g data-layer="artwork">
