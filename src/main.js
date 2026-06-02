@@ -176,7 +176,7 @@ import { createZipBlob } from "./zip-helper.js";
       colors: 8,
       ltres: 3,
       qtres: 3,
-      pathomit: 14,
+      pathomit: 8,
       blurradius: 2,
       blurdelta: 40,
       mincolorratio: 0.025,
@@ -657,9 +657,9 @@ import { createZipBlob } from "./zip-helper.js";
 
     svgDoc.querySelectorAll("path").forEach((path) => {
       const d = path.getAttribute("d") || "";
-      // Count distinct path commands; fewer than 8 means the path has no meaningful shape
+      // Count distinct path commands; fewer than 10 means the path has no meaningful shape
       const commandCount = (d.match(/[MLHVCSQTAZ]/gi) || []).length;
-      if (commandCount < 8 || d === "M0 0") {
+      if (commandCount < 10 || d === "M0 0") {
         path.remove();
       }
     });
@@ -1327,7 +1327,8 @@ import { createZipBlob } from "./zip-helper.js";
       colorsampling: config.colorsampling !== undefined ? Number(config.colorsampling) : 1,
       colorquantcycles: hq ? 3 : 2,
       // Allow per-preset override; otherwise fall back to HQ-aware global default.
-      mincolorratio: config.mincolorratio !== undefined ? Number(config.mincolorratio) : (hq ? 0.01 : 0.02),
+      mincolorratio:
+        config.mincolorratio !== undefined ? Number(config.mincolorratio) : hq ? 0.01 : 0.02,
       layering: 0,
       linefilter: true,
       rightangleenhance: true,
