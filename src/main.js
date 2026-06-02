@@ -149,10 +149,10 @@ import { createZipBlob } from "./zip-helper.js";
 
   const PRESETS = {
     logo: {
-      colors: 8,
-      ltres: 4,
-      qtres: 4,
-      pathomit: 10,
+      colors: 16,
+      ltres: 3,
+      qtres: 3,
+      pathomit: 8,
       blurradius: 0,
       scale: 1.0,
       optimize: true,
@@ -160,21 +160,22 @@ import { createZipBlob } from "./zip-helper.js";
       highQuality: true,
     },
     photo: {
-      colors: 16,
-      ltres: 3,
-      qtres: 3,
-      pathomit: 12,
+      colors: 32,
+      ltres: 2,
+      qtres: 2,
+      pathomit: 10,
       blurradius: 2,
+      blurdelta: 64,
       scale: 1.0,
       optimize: true,
       outline: false,
       highQuality: true,
     },
     drawing: {
-      colors: 10,
-      ltres: 4,
-      qtres: 4,
-      pathomit: 12,
+      colors: 16,
+      ltres: 3,
+      qtres: 3,
+      pathomit: 10,
       blurradius: 1,
       scale: 1.0,
       optimize: true,
@@ -183,9 +184,9 @@ import { createZipBlob } from "./zip-helper.js";
     },
     lineart: {
       colors: 4,
-      ltres: 6,
-      qtres: 6,
-      pathomit: 16,
+      ltres: 4,
+      qtres: 4,
+      pathomit: 12,
       blurradius: 0,
       scale: 1.0,
       optimize: true,
@@ -1145,7 +1146,7 @@ import { createZipBlob } from "./zip-helper.js";
       if (jobToken !== activeJobToken) return;
 
       try {
-        const options = getOptionsFromUI();
+        const options = createTraceOptions(getOptionsFromUI());
         const startTime = performance.now();
 
         const imgData = getTracingImageData(currentImgElement, PREVIEW_TRACE_MAX_DIM);
@@ -1311,21 +1312,22 @@ import { createZipBlob } from "./zip-helper.js";
       qtres: Number(config.qtres),
       pathomit: Number(config.pathomit),
       blurradius: Number(config.blurradius),
+      blurdelta: config.blurdelta !== undefined ? Number(config.blurdelta) : 20,
       scale: Number(config.scale),
       optimize: !!config.optimize,
       outline: !!config.outline,
       colorsampling: 2,
-      colorquantcycles: hq ? 4 : 2,
-      mincolorratio: hq ? 0.003 : 0.01,
+      colorquantcycles: hq ? 5 : 2,
+      mincolorratio: hq ? 0.002 : 0.01,
       layering: 0,
       linefilter: true,
       rightangleenhance: true,
       roundcoords: hq ? 2 : 1,
       desc: false,
       viewbox: true,
-      strokewidth: 1,
-      lcpr: 0,
-      qcpr: 0,
+      strokewidth: 0,
+      lcpr: hq ? 0.5 : 0,
+      qcpr: hq ? 0.5 : 0,
     };
   }
 
