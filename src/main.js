@@ -1,163 +1,52 @@
 import ImageTracer from "imagetracerjs";
 import { createZipBlob } from "./zip-helper.js";
 
-(function () {
+(() => {
   "use strict";
 
-  // --- Selectors ---
-  const $ = (s) => document.querySelector(s);
-  const $$ = (s) => Array.from(document.querySelectorAll(s));
+  const tracer = ImageTracer || window.ImageTracer;
 
-  // --- Security Helpers ---
-  const escapeHTML = (str) => {
-    if (!str) return "";
-    return String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  };
+  const CONFIG = Object.freeze({
+    storageKey: "svg_converter_presets_v2",
+    workingImageMaxDim: 1600,
+    previewTraceMaxDim: 720,
+    backgroundSampleSize: 16,
+    backgroundThreshold: 64,
+    maxFileSize: 8 * 1024 * 1024,
+    minZoom: 0.5,
+    maxZoom: 4,
+    zoomStepButton: 0.25,
+    zoomStepWheel: 0.1,
+  });
 
-  const safeGet = (obj, key) => {
-    if (key === "__proto__" || key === "constructor" || key === "prototype") return undefined;
-    if (obj && Object.prototype.hasOwnProperty.call(obj, key)) {
-      return obj[key];
-    }
-    return undefined;
-  };
-
-  const safeSet = (obj, key, val) => {
-    if (key === "__proto__" || key === "constructor" || key === "prototype") return;
-    obj[key] = val;
-  };
-
-  const safeDelete = (obj, key) => {
-    if (key === "__proto__" || key === "constructor" || key === "prototype") return;
-    delete obj[key];
-  };
-
-  // Helper to extract ImageData, optionally downscaling to prevent main-thread hangs
-  const getTracingImageData = (img, maxDim = 1000) => {
-    const w = img.naturalWidth || img.width;
-    const h = img.naturalHeight || img.height;
-
-    let traceW = w;
-    let traceH = h;
-    if (maxDim && (traceW > maxDim || traceH > maxDim)) {
-      if (traceW > traceH) {
-        traceH = Math.round((traceH * maxDim) / traceW);
-        traceW = maxDim;
-      } else {
-        traceW = Math.round((traceW * maxDim) / traceH);
-        traceH = maxDim;
-      }
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = traceW;
-    canvas.height = traceH;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0, traceW, traceH);
-    return ctx.getImageData(0, 0, traceW, traceH);
-  };
-
-  const dropZone = $("#drop-zone");
-  const fileInput = $("#file-input");
-  const welcomeScreen = $("#welcome-screen");
-  const workspaceIntake = $("#workspace-intake");
-  const enterAppBtn = $("#enter-app-btn");
-  const appGrid = $("#app-grid");
-
-  // Results view elements
-  const comparisonBox = $("#comparison-box");
-  const originalPane = $("#pane-original");
-  const vectorPane = $("#pane-vector");
-  // Toolbar controls
-  const zoomInBtn = $("#zoom-in-btn");
-  const zoomOutBtn = $("#zoom-out-btn");
-  const zoomResetBtn = $("#zoom-reset-btn");
-  const zoomValDisplay = $("#zoom-val");
-
-  // Settings controls
-  const colorsInput = $("#numberofcolors");
-  const ltresInput = $("#ltres");
-  const qtresInput = $("#qtres");
-  const pathomitInput = $("#pathomit");
-  const blurInput = $("#blurradius");
-  const scaleInput = $("#scale");
-  const optimizeInput = $("#path-optimize");
-  const outlineInput = $("#outline-mode");
-  const hqInput = $("#high-quality");
-
-  // Presets
-  const presetsContainer = $("#presets-container");
-  const customPresetsSelect = $("#preset-select");
-  const assetSummary = $("#asset-summary");
-
-  // Queue & download elements
-  const batchQueueSection = $("#batch-queue");
-  const queueList = $("#queue-list");
-  const downloadOptions = $("#download-options");
-  const downloadVectorBtn = $("#download-vector-btn");
-  const downloadZipBtn = $("#download-zip-btn");
-
-  // Metrics elements
-  const metricOriginalSize = $("#metric-original-size");
-  const metricSvgSize = $("#metric-svg-size");
-  const metricCompression = $("#metric-compression");
-  const metricTime = $("#metric-time");
-  const metricColors = $("#metric-colors");
-  const metricPaths = $("#metric-paths");
-
-  // Theme Toggle
-  const themeToggleBtn = $("#theme-toggle");
-
-  // --- App State ---
-  let queue = []; // Array of processed file objects
-  let currentFileIndex = -1;
-  let currentSvgString = null;
-  let currentImgElement = null;
-  let activePresetName = "logo";
-  let activeJobToken = 0;
-  let activeQualityToken = 0;
-  let suppressRetrace = false;
-
-  // Zoom/Pan State
-  let zoom = 1.0;
-  let panX = 0;
-  let panY = 0;
-  let isPanning = false;
-  let startX = 0;
-  let startY = 0;
-
-  // Debouncing for settings changes
-  let conversionDebounceTimeout = null;
-
-  // Standard preset values
-  const DEFAULTS = {
-    colors: 6,
-    ltres: 6,
-    qtres: 6,
-    pathomit: 14,
-    blurradius: 1,
-    scale: 1.0,
-    optimize: true,
-    outline: true,
-    highQuality: true,
-  };
-
-  const PRESETS = {
+  const PRESETS = Object.freeze({
+    default: {
+      colors: 6,
+      ltres: 6,
+      qtres: 6,
+      pathomit: 14,
+      blurradius: 1,
+      blurdelta: 20,
+      scale: 1,
+      optimize: true,
+      outline: true,
+      highQuality: true,
+      colorsampling: 1,
+      mincolorratio: 0.01,
+    },
     logo: {
       colors: 16,
       ltres: 3,
       qtres: 3,
       pathomit: 8,
       blurradius: 0,
-      scale: 1.0,
+      blurdelta: 20,
+      scale: 1,
       optimize: true,
       outline: true,
       highQuality: true,
+      colorsampling: 1,
+      mincolorratio: 0.01,
     },
     photo: {
       colors: 32,
@@ -166,11 +55,12 @@ import { createZipBlob } from "./zip-helper.js";
       pathomit: 10,
       blurradius: 2,
       blurdelta: 64,
-      scale: 1.0,
+      scale: 1,
       optimize: true,
       outline: false,
       highQuality: true,
       colorsampling: 2,
+      mincolorratio: 0.01,
     },
     drawing: {
       colors: 8,
@@ -179,11 +69,12 @@ import { createZipBlob } from "./zip-helper.js";
       pathomit: 8,
       blurradius: 2,
       blurdelta: 40,
-      mincolorratio: 0.025,
-      scale: 1.0,
+      scale: 1,
       optimize: true,
       outline: true,
       highQuality: true,
+      colorsampling: 1,
+      mincolorratio: 0.025,
     },
     lineart: {
       colors: 4,
@@ -191,41 +82,233 @@ import { createZipBlob } from "./zip-helper.js";
       qtres: 4,
       pathomit: 12,
       blurradius: 0,
-      scale: 1.0,
+      blurdelta: 20,
+      scale: 1,
       optimize: true,
       outline: true,
       highQuality: true,
+      colorsampling: 1,
+      mincolorratio: 0.01,
     },
-  };
+  });
 
-  const STORAGE_KEY = "svg_converter_presets_v2";
-  const WORKING_IMAGE_MAX_DIM = 1600;
-  const PREVIEW_TRACE_MAX_DIM = 720;
-  const BACKGROUND_SAMPLE_SIZE = 16;
-  const BACKGROUND_THRESHOLD = 64;
-  const tracer = ImageTracer || window.ImageTracer;
-  const ASSET_LABELS = {
+  const ASSET_LABELS = Object.freeze({
     logo: "Logo or flat graphic",
     photo: "Photo or gradient-heavy image",
     drawing: "Illustration or drawing",
     lineart: "Line art",
+  });
+
+  const state = {
+    queue: [],
+    currentFileIndex: -1,
+    currentSvgString: "",
+    currentImgElement: null,
+    activePresetName: "logo",
+    activeJobToken: 0,
+    suppressRetrace: false,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    isPanning: false,
+    pointerId: null,
+    pointerStartX: 0,
+    pointerStartY: 0,
+    panStartX: 0,
+    panStartY: 0,
+    theme: "light",
+    memoryStore: new Map(),
+    conversionDebounceId: 0,
   };
 
-  // --- Helper: Format Bytes ---
-  function formatBytes(bytes) {
-    if (bytes === undefined || bytes === null || isNaN(bytes)) return "—";
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+  const dom = {
+    dropZone: document.querySelector("#drop-zone"),
+    fileInput: document.querySelector("#file-input"),
+    welcomeScreen: document.querySelector("#welcome-screen"),
+    workspaceIntake: document.querySelector("#workspace-intake"),
+    enterAppBtn: document.querySelector("#enter-app-btn"),
+    appGrid: document.querySelector("#app-grid"),
+
+    comparisonBox: document.querySelector("#comparison-box"),
+    originalPane: document.querySelector("#pane-original"),
+    vectorPane: document.querySelector("#pane-vector"),
+
+    zoomInBtn: document.querySelector("#zoom-in-btn"),
+    zoomOutBtn: document.querySelector("#zoom-out-btn"),
+    zoomResetBtn: document.querySelector("#zoom-reset-btn"),
+    zoomVal: document.querySelector("#zoom-val"),
+
+    colorsInput: document.querySelector("#numberofcolors"),
+    ltresInput: document.querySelector("#ltres"),
+    qtresInput: document.querySelector("#qtres"),
+    pathomitInput: document.querySelector("#pathomit"),
+    blurInput: document.querySelector("#blurradius"),
+    scaleInput: document.querySelector("#scale"),
+    optimizeInput: document.querySelector("#path-optimize"),
+    outlineInput: document.querySelector("#outline-mode"),
+    highQualityInput: document.querySelector("#high-quality"),
+
+    presetsContainer: document.querySelector("#presets-container"),
+    presetSelect: document.querySelector("#preset-select"),
+    customPresetActions: document.querySelector("#custom-preset-actions"),
+    assetSummary: document.querySelector("#asset-summary"),
+
+    batchQueueSection: document.querySelector("#batch-queue"),
+    queueList: document.querySelector("#queue-list"),
+    downloadOptions: document.querySelector("#download-options"),
+    downloadVectorBtn: document.querySelector("#download-vector-btn"),
+    downloadZipBtn: document.querySelector("#download-zip-btn"),
+
+    metricOriginalSize: document.querySelector("#metric-original-size"),
+    metricSvgSize: document.querySelector("#metric-svg-size"),
+    metricCompression: document.querySelector("#metric-compression"),
+    metricTime: document.querySelector("#metric-time"),
+    metricColors: document.querySelector("#metric-colors"),
+    metricPaths: document.querySelector("#metric-paths"),
+
+    themeToggleBtn: document.querySelector("#theme-toggle"),
+    announcer: document.querySelector("#a11y-announcer"),
+  };
+
+  function $(selector, root = document) {
+    return root.querySelector(selector);
   }
 
-  // --- File System Access Helper ---
-  async function readFile(file) {
-    const isTIFF =
-      file.type === "image/tiff" ||
-      file.name.toLowerCase().endsWith(".tif") ||
-      file.name.toLowerCase().endsWith(".tiff");
-    if (!isTIFF) return null;
+  function createEl(tag, props = {}, children = []) {
+    const el = document.createElement(tag);
+    Object.entries(props).forEach(([key, value]) => {
+      if (key === "className") el.className = value;
+      else if (key === "text") el.textContent = value;
+      else if (key === "html") el.innerHTML = value;
+      else if (value !== undefined && value !== null) el.setAttribute(key, String(value));
+    });
+    children.forEach((child) => child && el.appendChild(child));
+    return el;
+  }
+
+  function safeStorageGet(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch {
+      return state.memoryStore.get(key) ?? null;
+    }
+  }
+
+  function safeStorageSet(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {
+      state.memoryStore.set(key, value);
+    }
+  }
+
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes)) return "—";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  function sanitizeFileName(name) {
+    const cleaned = String(name || "vectorized-file")
+      .replace(/[\\/:*?"<>|]/g, "_")
+      .trim();
+    return cleaned || "vectorized-file";
+  }
+
+  function announce(message) {
+    if (!dom.announcer) return;
+    dom.announcer.textContent = "";
+    requestAnimationFrame(() => {
+      dom.announcer.textContent = message;
+    });
+  }
+
+  function showWorkspace() {
+    dom.welcomeScreen?.classList.add("hidden");
+    dom.workspaceIntake?.classList.remove("hidden");
+    dom.appGrid?.classList.remove("hidden");
+    dom.dropZone?.focus({ preventScroll: true });
+  }
+
+  function setTheme(theme, save = true) {
+    const resolved =
+      theme === "system"
+        ? window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light"
+        : theme;
+
+    state.theme = resolved;
+    document.documentElement.setAttribute("data-theme", resolved);
+    document.documentElement.style.colorScheme = resolved;
+
+    if (save) safeStorageSet("theme-color-scheme", theme);
+    updateThemeIcon(resolved);
+  }
+
+  function updateThemeIcon(theme) {
+    if (!dom.themeToggleBtn) return;
+    dom.themeToggleBtn.setAttribute(
+      "aria-label",
+      theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+    );
+    dom.themeToggleBtn.innerHTML =
+      theme === "dark"
+        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>'
+        : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  }
+
+  function initTheme() {
+    const saved = safeStorageGet("theme-color-scheme") || "system";
+    setTheme(saved, false);
+    dom.themeToggleBtn?.addEventListener("click", () => {
+      setTheme(state.theme === "dark" ? "light" : "dark", true);
+    });
+  }
+
+  function getContainedSize(width, height, maxDim) {
+    if (width <= maxDim && height <= maxDim) return { width, height };
+    if (width >= height) {
+      return {
+        width: maxDim,
+        height: Math.max(1, Math.round((height * maxDim) / width)),
+      };
+    }
+    return {
+      width: Math.max(1, Math.round((width * maxDim) / height)),
+      height: maxDim,
+    };
+  }
+
+  function cleanupCanvas(canvas) {
+    if (!canvas) return;
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+
+  function cleanupImage(img) {
+    if (!img) return;
+    img.onload = null;
+    img.onerror = null;
+    if (img.src?.startsWith("blob:")) URL.revokeObjectURL(img.src);
+    img.src = "";
+  }
+
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Unable to decode the selected image."));
+      img.src = src;
+    });
+  }
+
+  async function readFileIfTiff(file) {
+    const lower = file.name.toLowerCase();
+    const isTiff = file.type === "image/tiff" || lower.endsWith(".tif") || lower.endsWith(".tiff");
+    if (!isTiff) return null;
 
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -235,31 +318,55 @@ import { createZipBlob } from "./zip-helper.js";
     });
   }
 
-  function loadImageFromSource(src) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("Unable to decode the selected image."));
-      img.src = src;
+  async function validateImageFile(file) {
+    if (!file) throw new Error("No file selected.");
+    if (file.size === 0) throw new Error(`File "${file.name}" is empty.`);
+    if (file.size > CONFIG.maxFileSize) {
+      throw new Error(`File "${file.name}" exceeds the 8MB browser-safe limit.`);
+    }
+
+    const header = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => resolve(new Uint8Array(event.target.result));
+      reader.onerror = () => reject(new Error("Unable to read file header."));
+      reader.readAsArrayBuffer(file.slice(0, 4));
     });
+
+    const hex = Array.from(header)
+      .map((b) => b.toString(16).toUpperCase().padStart(2, "0"))
+      .join(" ");
+
+    const isPNG = hex.startsWith("89 50 4E 47");
+    const isJPG = hex.startsWith("FF D8 FF");
+    const isBMP = hex.startsWith("42 4D");
+    const isTIFF =
+      hex.startsWith("49 49 2A 00") ||
+      hex.startsWith("4D 4D 00 2A") ||
+      file.name.toLowerCase().endsWith(".tiff") ||
+      file.name.toLowerCase().endsWith(".tif");
+
+    if (!isPNG && !isJPG && !isBMP && !isTIFF) {
+      throw new Error(`File "${file.name}" is not a supported format or is corrupt.`);
+    }
   }
 
-  function getContainedSize(width, height, maxDim) {
-    if (width <= maxDim && height <= maxDim) {
-      return { width, height };
-    }
+  function getTracingImageData(img, maxDim) {
+    const width = img.naturalWidth || img.width;
+    const height = img.naturalHeight || img.height;
+    const target = getContainedSize(width, height, maxDim);
 
-    if (width >= height) {
-      return {
-        width: maxDim,
-        height: Math.max(1, Math.round((height * maxDim) / width)),
-      };
-    }
+    const canvas = document.createElement("canvas");
+    canvas.width = target.width;
+    canvas.height = target.height;
 
-    return {
-      width: Math.max(1, Math.round((width * maxDim) / height)),
-      height: maxDim,
-    };
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, target.width, target.height);
+
+    const imageData = ctx.getImageData(0, 0, target.width, target.height);
+    cleanupCanvas(canvas);
+    return imageData;
   }
 
   function colorDistanceSq(data, idx, color) {
@@ -271,7 +378,7 @@ import { createZipBlob } from "./zip-helper.js";
 
   function estimateBackgroundColor(data, width, height) {
     const samples = [];
-    const size = Math.min(BACKGROUND_SAMPLE_SIZE, width, height);
+    const size = Math.min(CONFIG.backgroundSampleSize, width, height);
     const regions = [
       [0, 0],
       [width - size, 0],
@@ -279,39 +386,39 @@ import { createZipBlob } from "./zip-helper.js";
       [width - size, height - size],
     ];
 
-    regions.forEach(([startX, startY]) => {
+    for (const [startX, startY] of regions) {
       for (let y = startY; y < startY + size; y++) {
         for (let x = startX; x < startX + size; x++) {
           const idx = (y * width + x) * 4;
           samples.push([data[idx], data[idx + 1], data[idx + 2]]);
         }
       }
-    });
+    }
 
-    const color = samples.reduce(
-      (acc, sample) => {
-        acc.r += sample[0];
-        acc.g += sample[1];
-        acc.b += sample[2];
+    const avg = samples.reduce(
+      (acc, [r, g, b]) => {
+        acc.r += r;
+        acc.g += g;
+        acc.b += b;
         return acc;
       },
       { r: 0, g: 0, b: 0 }
     );
 
-    color.r = Math.round(color.r / samples.length);
-    color.g = Math.round(color.g / samples.length);
-    color.b = Math.round(color.b / samples.length);
+    avg.r = Math.round(avg.r / samples.length);
+    avg.g = Math.round(avg.g / samples.length);
+    avg.b = Math.round(avg.b / samples.length);
 
     const variance = Math.sqrt(
-      samples.reduce((sum, sample) => {
-        const dr = sample[0] - color.r;
-        const dg = sample[1] - color.g;
-        const db = sample[2] - color.b;
+      samples.reduce((sum, [r, g, b]) => {
+        const dr = r - avg.r;
+        const dg = g - avg.g;
+        const db = b - avg.b;
         return sum + dr * dr + dg * dg + db * db;
       }, 0) / samples.length
     );
 
-    return { ...color, variance };
+    return { ...avg, variance };
   }
 
   function removeConnectedBackground(canvas, ctx) {
@@ -322,9 +429,13 @@ import { createZipBlob } from "./zip-helper.js";
     const bg = estimateBackgroundColor(data, width, height);
     const threshold = Math.min(
       96,
-      Math.max(BACKGROUND_THRESHOLD, Math.round(bg.variance * 1.4 + BACKGROUND_THRESHOLD))
+      Math.max(
+        CONFIG.backgroundThreshold,
+        Math.round(bg.variance * 1.4 + CONFIG.backgroundThreshold)
+      )
     );
     const thresholdSq = threshold * threshold;
+
     const visited = new Uint8Array(width * height);
     const queue = new Int32Array(width * height);
     let head = 0;
@@ -375,14 +486,13 @@ import { createZipBlob } from "./zip-helper.js";
         data[idx + 3] = 0;
         continue;
       }
-
       if (data[idx + 3] > 8) {
         const x = pos % width;
         const y = Math.floor(pos / width);
-        minX = Math.min(minX, x);
-        minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x);
-        maxY = Math.max(maxY, y);
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
       }
     }
 
@@ -404,6 +514,7 @@ import { createZipBlob } from "./zip-helper.js";
       cropCanvas.height = cropH;
       const cropCtx = cropCanvas.getContext("2d");
       cropCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
       canvas.width = cropW;
       canvas.height = cropH;
       ctx = canvas.getContext("2d");
@@ -411,22 +522,20 @@ import { createZipBlob } from "./zip-helper.js";
       cleanupCanvas(cropCanvas);
     }
 
-    return {
-      removedBackground: true,
-      width: canvas.width,
-      height: canvas.height,
-    };
+    return { removedBackground: true, width: canvas.width, height: canvas.height };
   }
 
   function canvasToWorkingDataURL(source, width, height) {
-    const target = getContainedSize(width, height, WORKING_IMAGE_MAX_DIM);
+    const target = getContainedSize(width, height, CONFIG.workingImageMaxDim);
     const canvas = document.createElement("canvas");
     canvas.width = target.width;
     canvas.height = target.height;
+
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(source, 0, 0, target.width, target.height);
+
     const backgroundResult = removeConnectedBackground(canvas, ctx);
 
     try {
@@ -454,13 +563,14 @@ import { createZipBlob } from "./zip-helper.js";
         source = tiff.toCanvas();
       } else {
         sourceUrl = URL.createObjectURL(file);
-        source = await loadImageFromSource(sourceUrl);
+        source = await loadImage(sourceUrl);
       }
 
       const originalWidth = source.naturalWidth || source.width;
       const originalHeight = source.naturalHeight || source.height;
+
       const working = canvasToWorkingDataURL(source, originalWidth, originalHeight);
-      const img = await loadImageFromSource(working.dataUrl);
+      const img = await loadImage(working.dataUrl);
 
       return {
         img,
@@ -473,749 +583,8 @@ import { createZipBlob } from "./zip-helper.js";
       };
     } finally {
       if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-      if (source && source instanceof HTMLImageElement) cleanupImage(source);
-      if (source && source instanceof HTMLCanvasElement) cleanupCanvas(source);
-    }
-  }
-
-  // --- Memory and Element Cleanups ---
-  function cleanupImage(img) {
-    if (!img) return;
-    img.onload = null;
-    img.onerror = null;
-    if (img.src && img.src.startsWith("blob:")) {
-      URL.revokeObjectURL(img.src);
-    }
-    img.src = "";
-  }
-
-  function cleanupCanvas(canvas) {
-    if (!canvas) return;
-    canvas.width = 0;
-    canvas.height = 0;
-  }
-
-  // --- File Validation (Signatures, limits) ---
-  async function validateImageFile(file) {
-    if (!file) {
-      throw new Error("No file selected.");
-    }
-    if (file.size === 0) {
-      throw new Error(`File "${file.name}" is empty (0 bytes). Please upload a valid image file.`);
-    }
-    const MAX_SIZE = 8 * 1024 * 1024; // Browser-safe local processing limit
-    if (file.size > MAX_SIZE) {
-      throw new Error(
-        `File "${file.name}" exceeds the 8MB browser-safe limit. Please use a smaller image.`
-      );
-    }
-
-    try {
-      const headerBytes = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(new Uint8Array(e.target.result));
-        reader.onerror = () => reject(new Error("Unable to read file header signature."));
-        reader.readAsArrayBuffer(file.slice(0, 4));
-      });
-
-      if (headerBytes.length < 2) {
-        throw new Error("File content is too small to identify format.");
-      }
-
-      const hex = Array.from(headerBytes)
-        .map((b) => b.toString(16).toUpperCase().padStart(2, "0"))
-        .join(" ");
-
-      const isPNG = hex.startsWith("89 50 4E 47");
-      const isJPG = hex.startsWith("FF D8 FF");
-      const isBMP = hex.startsWith("42 4D");
-      const isTIFF =
-        hex.startsWith("49 49 2A 00") ||
-        hex.startsWith("4D 4D 00 2A") ||
-        file.name.toLowerCase().endsWith(".tiff") ||
-        file.name.toLowerCase().endsWith(".tif");
-
-      if (!isPNG && !isJPG && !isBMP && !isTIFF) {
-        throw new Error(
-          `File "${file.name}" is not a supported format or is corrupt. Please upload PNG, JPG, BMP, or TIFF.`
-        );
-      }
-    } catch (err) {
-      throw new Error(`Validation failed for "${file.name}": ${err.message}`);
-    }
-  }
-
-  // --- UI Helpers for State / Process Overlays ---
-  function showProcessing(pane, message) {
-    // Remove existing processing overlay if any
-    const existing = pane.querySelector(".processing-overlay");
-    if (existing) existing.remove();
-
-    const overlay = document.createElement("div");
-    overlay.className = "processing-overlay";
-    overlay.innerHTML = `
-      <div class="spinner"></div>
-      <div class="processing-text">${escapeHTML(message)}</div>
-    `;
-    pane.appendChild(overlay);
-    return overlay;
-  }
-
-  function showErrorInPanes(message) {
-    originalPane.innerHTML = `<div class="preview-placeholder error-message" role="alert">
-      <h4>Image Load Error</h4>
-      <p>${escapeHTML(message)}</p>
-    </div>`;
-    vectorPane.innerHTML = `<div class="preview-placeholder error-message">
-      <h4>Conversion Halted</h4>
-      <p>Please resolve the loading error to proceed.</p>
-    </div>`;
-    if (downloadOptions) downloadOptions.classList.add("hidden");
-  }
-
-  function announceA11y(msg) {
-    let announcer = $("#a11y-announcer");
-    if (!announcer) {
-      announcer = document.createElement("div");
-      announcer.id = "a11y-announcer";
-      announcer.className = "sr-only";
-      announcer.setAttribute("aria-live", "polite");
-      announcer.setAttribute("aria-atomic", "true");
-      document.body.appendChild(announcer);
-    }
-    announcer.textContent = msg;
-  }
-
-  function showWorkspace() {
-    if (welcomeScreen) welcomeScreen.classList.add("hidden");
-    if (workspaceIntake) workspaceIntake.classList.remove("hidden");
-    if (dropZone) dropZone.focus({ preventScroll: true });
-  }
-
-  function setupAppFlow() {
-    if (!enterAppBtn) return;
-    enterAppBtn.addEventListener("click", () => {
-      showWorkspace();
-      announceA11y("Workspace ready. Upload an image to begin.");
-    });
-  }
-
-  function setAssetSummary(profile) {
-    if (!assetSummary) return;
-
-    const typeEl = assetSummary.querySelector(".asset-type");
-    const detailEl = assetSummary.querySelector(".asset-detail");
-    if (!typeEl || !detailEl) return;
-
-    if (!profile) {
-      typeEl.textContent = "No asset loaded";
-      detailEl.textContent = "Upload an image to apply an automatic profile.";
-      return;
-    }
-
-    typeEl.textContent = ASSET_LABELS[profile.type] || "Detected asset";
-    const backgroundNote = profile.removedBackground ? " Background removed." : "";
-    if (profile.downscaled || profile.removedBackground) {
-      detailEl.textContent = `${profile.originalWidth} x ${profile.originalHeight}px prepared as ${profile.workingWidth} x ${profile.workingHeight}px before vectorizing.${backgroundNote}`;
-    } else {
-      detailEl.textContent = `${profile.width} x ${profile.height}px. Applied the ${profile.type} profile automatically.`;
-    }
-  }
-
-  function createSafeSVG(img, profile) {
-    if (!tracer || typeof tracer.imagedataToSVG !== "function") {
-      throw new Error("Vector tracer is unavailable. Please reload the app and try again.");
-    }
-
-    const presetConfig = safeGet(PRESETS, profile.type) || DEFAULTS;
-    const imgData = getTracingImageData(img, PREVIEW_TRACE_MAX_DIM);
-    const rawSvg = tracer.imagedataToSVG(imgData, createTraceOptions(presetConfig));
-    return {
-      svgString: optimizeSvgString(rawSvg),
-      mode: "vector",
-    };
-  }
-
-  function optimizeSvgString(svgString) {
-    if (!svgString) return "";
-
-    const parser = new DOMParser();
-    const svgDoc = parser.parseFromString(svgString, "image/svg+xml");
-    const svgElement = svgDoc.documentElement;
-    const parseError = svgDoc.querySelector("parsererror");
-    if (parseError || !svgElement || svgElement.nodeName.toLowerCase() !== "svg") {
-      return svgString.replace(/>\s+</g, "><").trim();
-    }
-
-    svgDoc.querySelectorAll("title, desc, metadata").forEach((node) => node.remove());
-    ensureSvgViewBox(svgElement);
-    svgDoc.querySelectorAll("*").forEach((node) => {
-      node.removeAttribute("id");
-      node.removeAttribute("class");
-      node.removeAttribute("data-name");
-    });
-
-    svgDoc.querySelectorAll("path").forEach((path) => {
-      const d = path.getAttribute("d") || "";
-      // Count distinct path commands; fewer than 10 means the path has no meaningful shape
-      const commandCount = (d.match(/[MLHVCSQTAZ]/gi) || []).length;
-      if (commandCount < 10 || d === "M0 0") {
-        path.remove();
-      }
-    });
-
-    const serialized = new XMLSerializer().serializeToString(svgElement);
-    return serialized
-      .replace(/<!--[\s\S]*?-->/g, "")
-      .replace(/>\s+</g, "><")
-      .replace(/\s{2,}/g, " ")
-      .trim();
-  }
-
-  function ensureSvgViewBox(svgElement) {
-    if (!svgElement || svgElement.getAttribute("viewBox")) return;
-
-    const parseLength = (value) => {
-      if (!value) return 0;
-      const parsed = parseFloat(String(value).replace(/[^\d.-]/g, ""));
-      return Number.isFinite(parsed) ? parsed : 0;
-    };
-
-    const width = parseLength(svgElement.getAttribute("width"));
-    const height = parseLength(svgElement.getAttribute("height"));
-    if (width > 0 && height > 0) {
-      svgElement.setAttribute("viewBox", `0 0 ${width} ${height}`);
-    }
-  }
-
-  // --- Theme Management with View Transitions ---
-  function initTheme() {
-    const savedTheme = localStorage.getItem("theme-color-scheme") || "system";
-    applyTheme(savedTheme, false);
-
-    if (themeToggleBtn) {
-      themeToggleBtn.addEventListener("click", () => {
-        const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
-        const nextTheme = currentTheme === "dark" ? "light" : "dark";
-
-        // Use modern View Transitions API if supported
-        if (document.startViewTransition) {
-          document.startViewTransition(() => {
-            applyTheme(nextTheme, true);
-          });
-        } else {
-          applyTheme(nextTheme, true);
-        }
-      });
-    }
-  }
-
-  function applyTheme(theme, save = true) {
-    let resolvedTheme = theme;
-    if (theme === "system") {
-      resolvedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-
-    document.documentElement.setAttribute("data-theme", resolvedTheme);
-    document.documentElement.style.colorScheme = resolvedTheme;
-
-    if (save) {
-      localStorage.setItem("theme-color-scheme", theme);
-    }
-
-    updateThemeIcon(resolvedTheme);
-  }
-
-  function updateThemeIcon(resolvedTheme) {
-    if (!themeToggleBtn) return;
-    if (resolvedTheme === "dark") {
-      themeToggleBtn.innerHTML = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`;
-      themeToggleBtn.title = "Switch to Light Mode";
-    } else {
-      themeToggleBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-      themeToggleBtn.title = "Switch to Dark Mode";
-    }
-  }
-
-  // --- Zoom & Pan Management ---
-  function applyZoomPan() {
-    const zoomWrappers = $$(".zoom-wrapper");
-    zoomWrappers.forEach((el) => {
-      el.style.transform = `scale(${zoom}) translate(${panX}px, ${panY}px)`;
-    });
-    if (zoomValDisplay) zoomValDisplay.textContent = Math.round(zoom * 100) + "%";
-  }
-
-  function setupZoomPanEvents() {
-    const panes = $$(".comparison-pane");
-    if (!panes.length) return;
-
-    panes.forEach((pane) => {
-      pane.addEventListener("mousedown", (e) => {
-        isPanning = true;
-        pane.style.cursor = "grabbing";
-        startX = e.clientX - panX * zoom;
-        startY = e.clientY - panY * zoom;
-      });
-
-      pane.addEventListener(
-        "wheel",
-        (e) => {
-          e.preventDefault();
-          const delta = e.deltaY < 0 ? 0.1 : -0.1;
-          zoom = Math.min(Math.max(zoom + delta, 0.5), 4.0);
-          applyZoomPan();
-        },
-        { passive: false }
-      );
-    });
-
-    window.addEventListener("mousemove", (e) => {
-      if (!isPanning) return;
-      panX = (e.clientX - startX) / zoom;
-      panY = (e.clientY - startY) / zoom;
-      applyZoomPan();
-    });
-
-    window.addEventListener("mouseup", () => {
-      if (isPanning) {
-        isPanning = false;
-        panes.forEach((pane) => {
-          pane.style.cursor = "";
-        });
-      }
-    });
-
-    // Zoom buttons
-    if (zoomInBtn)
-      zoomInBtn.addEventListener("click", () => {
-        zoom = Math.min(zoom + 0.25, 4.0);
-        applyZoomPan();
-      });
-    if (zoomOutBtn)
-      zoomOutBtn.addEventListener("click", () => {
-        zoom = Math.max(zoom - 0.25, 0.5);
-        applyZoomPan();
-      });
-    if (zoomResetBtn)
-      zoomResetBtn.addEventListener("click", () => {
-        zoom = 1.0;
-        panX = 0;
-        panY = 0;
-        applyZoomPan();
-      });
-  }
-
-  // --- File Inputs, Drag and Drop, and Clipboard Paste ---
-  function setupFileInputs() {
-    if (!dropZone || !fileInput) return;
-
-    const highlight = () => dropZone.classList.add("highlight");
-    const unhighlight = () => dropZone.classList.remove("highlight");
-
-    // Drag events
-    ["dragenter", "dragover"].forEach((name) => {
-      dropZone.addEventListener(name, (e) => {
-        e.preventDefault();
-        highlight();
-      });
-    });
-
-    ["dragleave", "dragend", "drop"].forEach((name) => {
-      dropZone.addEventListener(name, (e) => {
-        e.preventDefault();
-        unhighlight();
-      });
-    });
-
-    dropZone.addEventListener("drop", (e) => {
-      const files = e.dataTransfer && e.dataTransfer.files;
-      if (files && files.length) handleFiles(files);
-    });
-
-    dropZone.addEventListener("click", () => fileInput.click());
-
-    fileInput.addEventListener("change", (e) => {
-      if (e.target.files && e.target.files.length) handleFiles(e.target.files);
-    });
-
-    // Clipboard Paste
-    window.addEventListener("paste", (e) => {
-      const items = (e.clipboardData && e.clipboardData.items) || [];
-      const imageFiles = [];
-      for (const item of items) {
-        if (item.kind === "file" && item.type.startsWith("image/")) {
-          const file = item.getAsFile();
-          if (file) imageFiles.push(file);
-        }
-      }
-      if (imageFiles.length) handleFiles(imageFiles);
-    });
-
-    // Keyboard accessibility for dropzone
-    dropZone.setAttribute("tabindex", "0");
-    dropZone.setAttribute("role", "button");
-    dropZone.setAttribute("aria-label", "Upload images. Drag and drop or click to browse");
-    dropZone.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        fileInput.click();
-      }
-    });
-  }
-
-  // --- Queue State Management ---
-  async function handleFiles(fileList) {
-    const files = Array.from(fileList);
-    if (!files.length) return;
-
-    showWorkspace();
-
-    // Toggle grid view
-    if (appGrid) appGrid.classList.remove("hidden");
-
-    activeJobToken++;
-    activeQualityToken++;
-    queue = [
-      {
-        file: files[0],
-        status: "pending",
-        svgString: null,
-        originalSize: files[0].size,
-        svgSize: null,
-        paths: 0,
-        colors: 0,
-        compressionRatio: null,
-        ssim: null,
-        deltaE: null,
-        assetProfile: null,
-        processingTime: null,
-        errorMessage: null,
-        outputMode: null,
-      },
-    ];
-    currentFileIndex = -1;
-
-    updateQueueUI();
-    await loadQueueItem(0);
-  }
-
-  function updateQueueUI() {
-    if (batchQueueSection) batchQueueSection.classList.add("hidden");
-    if (!queue.length) {
-      return;
-    }
-
-    if (!queueList) return;
-
-    queueList.innerHTML = "";
-
-    queue.forEach((item, index) => {
-      const itemEl = document.createElement("div");
-      itemEl.className = `queue-item ${item.status} ${index === currentFileIndex ? "processing" : ""}`;
-
-      const compVal = item.compressionRatio ? `${item.compressionRatio}x` : "—";
-      let statusText = "Waiting...";
-      if (item.status === "completed") statusText = `Done (${compVal})`;
-      else if (item.status === "processing") statusText = "Converting...";
-      else if (item.status === "error") statusText = "Failed";
-
-      itemEl.innerHTML = `
-        <div class="queue-info">
-          <span class="queue-filename">${escapeHTML(item.file.name)}</span>
-          <span class="queue-status" ${item.status === "error" ? `title="${escapeHTML(item.errorMessage || "")}" style="color: var(--error-color, #ff4d4d);"` : ""}>${escapeHTML(statusText)}</span>
-        </div>
-        <div class="queue-actions">
-          <button class="btn btn-accent btn-small load-item-btn" type="button" data-index="${index}">View</button>
-          <button class="btn btn-small btn-secondary delete-item-btn" type="button" data-index="${index}">×</button>
-        </div>
-      `;
-
-      // Handle item loading
-      itemEl.querySelector(".load-item-btn").addEventListener("click", (e) => {
-        e.stopPropagation();
-        loadQueueItem(index);
-      });
-
-      // Handle item deletion
-      itemEl.querySelector(".delete-item-btn").addEventListener("click", (e) => {
-        e.stopPropagation();
-        removeQueueItem(index);
-      });
-
-      queueList.appendChild(itemEl);
-    });
-  }
-
-  async function loadQueueItem(index) {
-    if (index < 0 || index >= queue.length) return;
-
-    activeJobToken++;
-    const jobToken = activeJobToken;
-
-    currentFileIndex = index;
-    updateQueueUI();
-
-    const item = queue.at(index);
-
-    // Reset view panes to loading states
-    originalPane.innerHTML = '<div class="preview-placeholder">Loading original...</div>';
-    vectorPane.innerHTML = '<div class="preview-placeholder">Vectorizing...</div>';
-    if (downloadOptions) downloadOptions.classList.add("hidden");
-
-    try {
-      await validateImageFile(item.file);
-      if (jobToken !== activeJobToken) return;
-
-      const fileData = await readFile(item.file);
-      if (jobToken !== activeJobToken) return;
-
-      const workingImage = await loadWorkingImage(item.file, fileData);
-      if (jobToken !== activeJobToken) {
-        cleanupImage(workingImage.img);
-        return;
-      }
-
-      const img = workingImage.img;
-
-      await new Promise((resolve) => {
-        window.requestAnimationFrame(resolve);
-      });
-
-      {
-        if (jobToken !== activeJobToken) {
-          cleanupImage(img);
-          return;
-        }
-
-        if (currentImgElement) {
-          cleanupImage(currentImgElement);
-        }
-        currentImgElement = img;
-
-        originalPane.innerHTML = "";
-        const originalZoomWrapper = document.createElement("div");
-        originalZoomWrapper.className = "zoom-wrapper";
-        originalZoomWrapper.appendChild(img);
-        originalPane.appendChild(originalZoomWrapper);
-
-        if (!item.assetProfile) {
-          item.assetProfile = detectAssetProfile(img);
-          item.assetProfile.originalWidth = workingImage.originalWidth;
-          item.assetProfile.originalHeight = workingImage.originalHeight;
-          item.assetProfile.workingWidth = workingImage.workingWidth;
-          item.assetProfile.workingHeight = workingImage.workingHeight;
-          item.assetProfile.downscaled = workingImage.downscaled;
-          item.assetProfile.removedBackground = workingImage.removedBackground;
-        }
-        setAssetSummary(item.assetProfile);
-
-        // Check if item has already been successfully vectorized
-        if (item.status === "completed" && item.svgString) {
-          applyPresetValues(item.assetProfile.type, { silent: true });
-          currentSvgString = item.svgString;
-          renderSVGString(item.svgString);
-          updateMetricsUI(item);
-          if (downloadOptions) downloadOptions.classList.remove("hidden");
-
-          zoom = 1.0;
-          panX = 0;
-          panY = 0;
-          applyZoomPan();
-
-          return;
-        }
-
-        item.status = "processing";
-        updateQueueUI();
-
-        const startTime = performance.now();
-        applyPresetValues(item.assetProfile.type, { silent: true });
-        let result;
-        try {
-          result = createSafeSVG(img, item.assetProfile);
-        } catch (err) {
-          console.error("Vector tracing failed:", err);
-          item.status = "error";
-          item.errorMessage = err.message || "Vector conversion failed.";
-          updateQueueUI();
-          showErrorInPanes(item.errorMessage);
-          return;
-        }
-        const { svgString, mode } = result;
-
-        if (jobToken !== activeJobToken) {
-          cleanupImage(img);
-          return;
-        }
-
-        currentSvgString = svgString;
-        renderSVGString(svgString);
-
-        const svgBlob = new Blob([svgString], { type: "image/svg+xml" });
-        const svgSize = svgBlob.size;
-
-        item.svgString = svgString;
-        item.svgSize = svgSize;
-        item.status = "completed";
-        item.outputMode = mode;
-        item.processingTime = (performance.now() - startTime) / 1000;
-
-        const parser = new DOMParser();
-        const svgDoc = parser.parseFromString(svgString, "image/svg+xml");
-        item.paths = svgDoc.querySelectorAll("path").length;
-        item.colors = await computeColors(img);
-        item.compressionRatio = (item.originalSize / svgSize).toFixed(1);
-
-        if (jobToken !== activeJobToken) return;
-
-        updateMetricsUI(item);
-        updateQueueUI();
-        if (downloadOptions) downloadOptions.classList.remove("hidden");
-
-        zoom = 1.0;
-        panX = 0;
-        panY = 0;
-        applyZoomPan();
-      }
-    } catch (err) {
-      if (jobToken !== activeJobToken) return;
-      item.status = "error";
-      item.errorMessage = err.message;
-      updateQueueUI();
-      showErrorInPanes(err.message);
-    }
-  }
-
-  function removeQueueItem(index) {
-    const deleted = queue.splice(index, 1)[0];
-    if (deleted && deleted.svgString) {
-      // Clean up cached SVG URL representation if any
-    }
-
-    if (currentFileIndex === index) {
-      if (currentImgElement) {
-        cleanupImage(currentImgElement);
-        currentImgElement = null;
-      }
-      currentFileIndex = queue.length ? 0 : -1;
-      currentSvgString = null;
-      originalPane.innerHTML = '<div class="preview-placeholder">Upload an image to begin</div>';
-      vectorPane.innerHTML = '<div class="preview-placeholder">SVG will appear here</div>';
-      if (downloadOptions) downloadOptions.classList.add("hidden");
-      setAssetSummary(null);
-    } else if (currentFileIndex > index) {
-      currentFileIndex--;
-    }
-
-    updateQueueUI();
-    if (currentFileIndex !== -1) loadQueueItem(currentFileIndex);
-  }
-
-  // --- Render SVG Document to preview pane ---
-  function renderSVGString(svgString) {
-    vectorPane.innerHTML = "";
-    const vectorZoomWrapper = document.createElement("div");
-    vectorZoomWrapper.className = "zoom-wrapper";
-
-    let sanitizedSvg = svgString || "";
-    if (sanitizedSvg.indexOf("xmlns=") === -1) {
-      sanitizedSvg = sanitizedSvg.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
-    }
-
-    const parser = new DOMParser();
-    const svgDoc = parser.parseFromString(sanitizedSvg, "image/svg+xml");
-    const svgElement = svgDoc.documentElement;
-    ensureSvgViewBox(svgElement);
-    svgElement.setAttribute("width", "100%");
-    svgElement.setAttribute("height", "100%");
-    svgElement.setAttribute("preserveAspectRatio", "xMidYMid meet");
-
-    vectorZoomWrapper.appendChild(svgElement);
-    vectorPane.appendChild(vectorZoomWrapper);
-    vectorPane.style.opacity = "1";
-  }
-
-  // --- Retrace current image with settings change ---
-  function retraceCurrent() {
-    if (!currentImgElement || !tracer || typeof tracer.imagedataToSVG !== "function") return;
-
-    activeJobToken++;
-    const jobToken = activeJobToken;
-
-    if (vectorPane) vectorPane.style.opacity = "0.6";
-
-    setTimeout(() => {
-      if (jobToken !== activeJobToken) return;
-
-      try {
-        const options = createTraceOptions(getOptionsFromUI());
-        const startTime = performance.now();
-
-        const imgData = getTracingImageData(currentImgElement, PREVIEW_TRACE_MAX_DIM);
-        const svgString = optimizeSvgString(tracer.imagedataToSVG(imgData, options));
-
-        if (jobToken !== activeJobToken) return;
-
-        currentSvgString = svgString;
-        renderSVGString(svgString);
-
-        const endTime = performance.now();
-        const elapsed = (endTime - startTime) / 1000;
-        const svgBlob = new Blob([svgString], { type: "image/svg+xml" });
-        const svgSize = svgBlob.size;
-
-        const item = queue.at(currentFileIndex);
-        if (item) {
-          item.svgString = svgString;
-          item.svgSize = svgSize;
-          item.processingTime = elapsed;
-
-          const parser = new DOMParser();
-          const svgDoc = parser.parseFromString(svgString, "image/svg+xml");
-          item.paths = svgDoc.querySelectorAll("path").length;
-          item.compressionRatio = (item.originalSize / svgSize).toFixed(1);
-
-          updateMetricsUI(item);
-        }
-
-        applyZoomPan();
-      } catch (err) {
-        console.warn("Retrace failed:", err);
-        if (vectorPane) vectorPane.style.opacity = "1";
-      }
-    }, 10);
-  }
-
-  // --- Canvas Color Sampling ---
-  async function computeColors(imgEl) {
-    try {
-      const maxSample = 120;
-      const w = imgEl.naturalWidth || imgEl.width;
-      const h = imgEl.naturalHeight || imgEl.height;
-      const sw = Math.min(maxSample, w);
-      const sh = Math.min(Math.round((h / w) * sw) || sw, maxSample);
-
-      const canvas = document.createElement("canvas");
-      canvas.width = sw;
-      canvas.height = sh;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(imgEl, 0, 0, sw, sh);
-
-      const data = ctx.getImageData(0, 0, sw, sh).data;
-      const set = new Set();
-      for (let i = 0; i < data.length; i += 4) {
-        const a = data.at(i + 3);
-        if (a === 0) continue;
-        const r = data.at(i);
-        const g = data.at(i + 1);
-        const b = data.at(i + 2);
-        const key = (((r >> 3) & 31) << 10) | (((g >> 3) & 31) << 5) | ((b >> 3) & 31);
-        set.add(key);
-      }
-      return set.size;
-    } catch (err) {
-      return 0;
+      if (source instanceof HTMLImageElement) cleanupImage(source);
+      if (source instanceof HTMLCanvasElement) cleanupCanvas(source);
     }
   }
 
@@ -1227,11 +596,12 @@ import { createZipBlob } from "./zip-helper.js";
     const canvas = document.createElement("canvas");
     canvas.width = sampleW;
     canvas.height = sampleH;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
     try {
       ctx.drawImage(imgEl, 0, 0, sampleW, sampleH);
       const data = ctx.getImageData(0, 0, sampleW, sampleH).data;
+
       const colors = new Set();
       let transparentPixels = 0;
       let edgeHits = 0;
@@ -1252,6 +622,7 @@ import { createZipBlob } from "./zip-helper.js";
           const b = data[idx + 2];
           const max = Math.max(r, g, b);
           const min = Math.min(r, g, b);
+
           colors.add(`${r >> 4}-${g >> 4}-${b >> 4}`);
           totalSaturation += max === 0 ? 0 : (max - min) / max;
           sampledPixels++;
@@ -1276,16 +647,9 @@ import { createZipBlob } from "./zip-helper.js";
       const avgSaturation = sampledPixels ? totalSaturation / sampledPixels : 0;
 
       let type = "drawing";
-      if (uniqueColors <= 10 && edgeDensity > 0.1) {
-        type = "lineart";
-      } else if (uniqueColors <= 34 && (transparentRatio > 0.08 || edgeDensity > 0.16)) {
-        type = "logo";
-      } else if ((uniqueColors > 70 || avgSaturation < 0.18) && edgeDensity < 0.13) {
-        // Classify as photo only if it also has low edge density (smooth photographic gradients).
-        // Illustrated or engraved assets with many JPEG-compression colors but crisp ink edges
-        // have high edgeDensity and should route to "drawing" instead.
-        type = "photo";
-      }
+      if (uniqueColors <= 10 && edgeDensity > 0.1) type = "lineart";
+      else if (uniqueColors <= 34 && (transparentRatio > 0.08 || edgeDensity > 0.16)) type = "logo";
+      else if ((uniqueColors > 70 || avgSaturation < 0.18) && edgeDensity < 0.13) type = "photo";
 
       return {
         type,
@@ -1295,44 +659,48 @@ import { createZipBlob } from "./zip-helper.js";
         edgeDensity: Math.round(edgeDensity * 100),
         transparentRatio: Math.round(transparentRatio * 100),
       };
-    } catch (err) {
-      return {
-        type: "logo",
-        width: w,
-        height: h,
-        uniqueColors: 0,
-        edgeDensity: 0,
-        transparentRatio: 0,
-      };
     } finally {
       cleanupCanvas(canvas);
     }
   }
 
-  // --- Settings Control Handling ---
-  function createTraceOptions(config) {
-    const hq = !!config.highQuality;
+  function normalizeTraceConfig(input) {
+    const merged = { ...PRESETS.default, ...input };
     return {
-      numberofcolors: Number(config.colors),
-      ltres: Number(config.ltres),
-      qtres: Number(config.qtres),
-      pathomit: Number(config.pathomit),
-      blurradius: Number(config.blurradius),
-      blurdelta: config.blurdelta !== undefined ? Number(config.blurdelta) : 20,
-      scale: Number(config.scale),
-      optimize: !!config.optimize,
-      outline: !!config.outline,
-      // Use image-based color sampling by default (fewer spurious color clusters).
-      // Photo preset overrides this to stochastic (2) via config.colorsampling.
-      colorsampling: config.colorsampling !== undefined ? Number(config.colorsampling) : 1,
-      colorquantcycles: hq ? 3 : 2,
-      // Allow per-preset override; otherwise fall back to HQ-aware global default.
-      mincolorratio:
-        config.mincolorratio !== undefined ? Number(config.mincolorratio) : hq ? 0.01 : 0.02,
+      colors: Number(merged.colors),
+      ltres: Number(merged.ltres),
+      qtres: Number(merged.qtres),
+      pathomit: Number(merged.pathomit),
+      blurradius: Number(merged.blurradius),
+      blurdelta: Number(merged.blurdelta),
+      scale: Number(merged.scale),
+      optimize: Boolean(merged.optimize),
+      outline: Boolean(merged.outline),
+      highQuality: Boolean(merged.highQuality),
+      colorsampling: Number(merged.colorsampling),
+      mincolorratio: Number(merged.mincolorratio),
+    };
+  }
+
+  function createTraceOptions(config) {
+    const normalized = normalizeTraceConfig(config);
+    return {
+      numberofcolors: normalized.colors,
+      ltres: normalized.ltres,
+      qtres: normalized.qtres,
+      pathomit: normalized.pathomit,
+      blurradius: normalized.blurradius,
+      blurdelta: normalized.blurdelta,
+      scale: normalized.scale,
+      optimize: normalized.optimize,
+      outline: normalized.outline,
+      colorsampling: normalized.colorsampling,
+      colorquantcycles: normalized.highQuality ? 3 : 2,
+      mincolorratio: normalized.mincolorratio,
       layering: 0,
       linefilter: true,
       rightangleenhance: true,
-      roundcoords: hq ? 2 : 1,
+      roundcoords: normalized.highQuality ? 2 : 1,
       desc: false,
       viewbox: true,
       strokewidth: 0,
@@ -1341,399 +709,986 @@ import { createZipBlob } from "./zip-helper.js";
     };
   }
 
-  function getOptionsFromUI() {
-    return {
-      numberofcolors: Number(colorsInput.value),
-      ltres: Number(ltresInput.value),
-      qtres: Number(qtresInput.value),
-      pathomit: Number(pathomitInput.value),
-      blurradius: Number(blurInput.value),
-      scale: Number(scaleInput.value),
-      optimize: optimizeInput.checked,
-      outline: outlineInput.checked,
-      highQuality: hqInput.checked,
+  function ensureSvgViewBox(svg) {
+    if (!svg || svg.getAttribute("viewBox")) return;
+    const parseLength = (value) => {
+      const parsed = parseFloat(String(value || "").replace(/[^\d.-]/g, ""));
+      return Number.isFinite(parsed) ? parsed : 0;
     };
+    const width = parseLength(svg.getAttribute("width"));
+    const height = parseLength(svg.getAttribute("height"));
+    if (width > 0 && height > 0) svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   }
 
-  function setupSettingsEvents() {
+  function collectReferencedIds(svg) {
+    const referenced = new Set();
+    const walker = svg.querySelectorAll("*");
+    const refPattern = /url\(#([^)]+)\)|#([A-Za-z][\w:.-]*)/g;
+
+    walker.forEach((node) => {
+      for (const attr of node.getAttributeNames()) {
+        const value = node.getAttribute(attr);
+        if (!value) continue;
+        let match;
+        while ((match = refPattern.exec(value))) {
+          referenced.add(match[1] || match[2]);
+        }
+      }
+    });
+
+    return referenced;
+  }
+
+  function sanitizeAndOptimizeSvg(svgString, { title = "", description = "" } = {}) {
+    if (!svgString) return "";
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgString, "image/svg+xml");
+    const svg = doc.documentElement;
+    const parseError = doc.querySelector("parsererror");
+
+    if (parseError || !svg || svg.nodeName.toLowerCase() !== "svg") {
+      return String(svgString).replace(/>\s+</g, "><").trim();
+    }
+
+    doc.querySelectorAll("script, foreignObject, iframe, object, embed").forEach((n) => n.remove());
+
+    doc.querySelectorAll("*").forEach((node) => {
+      for (const attr of [...node.getAttributeNames()]) {
+        const value = node.getAttribute(attr) || "";
+        if (/^on/i.test(attr)) node.removeAttribute(attr);
+        if (
+          (attr === "href" || attr === "xlink:href") &&
+          /^\s*(https?:|data:|javascript:)/i.test(value)
+        ) {
+          node.removeAttribute(attr);
+        }
+      }
+    });
+
+    doc.querySelectorAll("metadata").forEach((n) => n.remove());
+    ensureSvgViewBox(svg);
+
+    const referencedIds = collectReferencedIds(svg);
+
+    doc.querySelectorAll("[id]").forEach((node) => {
+      const id = node.getAttribute("id");
+      if (!referencedIds.has(id) && !/^svg-(title|desc)$/.test(id)) {
+        if (
+          ![
+            "linearGradient",
+            "radialGradient",
+            "pattern",
+            "clipPath",
+            "mask",
+            "filter",
+            "symbol",
+          ].includes(node.tagName)
+        ) {
+          node.removeAttribute("id");
+        }
+      }
+    });
+
+    doc.querySelectorAll("path").forEach((path) => {
+      const d = (path.getAttribute("d") || "").trim();
+      const fill = path.getAttribute("fill");
+      const stroke = path.getAttribute("stroke");
+      const display = path.getAttribute("display");
+      const visibility = path.getAttribute("visibility");
+      const opacity = Number(path.getAttribute("opacity") ?? 1);
+
+      if (!d || d === "M0 0") {
+        path.remove();
+        return;
+      }
+
+      const effectivelyInvisible =
+        display === "none" ||
+        visibility === "hidden" ||
+        opacity === 0 ||
+        (fill === "none" && (!stroke || stroke === "none"));
+
+      if (effectivelyInvisible) path.remove();
+    });
+
+    // --- Canonical SVG structure rebuild ---
+    // Strip any existing title/desc/metadata before we insert controlled versions.
+    doc.querySelectorAll("title, desc, metadata").forEach((n) => n.remove());
+
+    // Collect existing <defs> (may be undefined) and prune unreferenced children.
+    const existingDefs = svg.querySelector(":scope > defs");
+    if (existingDefs) {
+      [...existingDefs.children].forEach((child) => {
+        const id = child.getAttribute("id");
+        if (id && !referencedIds.has(id)) child.remove();
+      });
+    }
+
+    // Wrap every remaining artwork child (everything that isn't <defs>) in a
+    // named layer group so downstream tools can target the artwork cleanly.
+    const artworkNodes = [...svg.children].filter(
+      (n) => n.tagName.toLowerCase() !== "defs"
+    );
+    const artworkGroup = doc.createElementNS("http://www.w3.org/2000/svg", "g");
+    artworkGroup.setAttribute("data-layer", "artwork");
+    artworkGroup.setAttribute("fill", "none");
+    artworkNodes.forEach((n) => artworkGroup.appendChild(n));
+
+    // Build the <defs> element (empty when ImageTracer produces no gradients/clips).
+    const defsEl =
+      existingDefs || doc.createElementNS("http://www.w3.org/2000/svg", "defs");
+
+    // Clear svg and re-insert children in canonical order:
+    //   <title> → <desc> → <defs> → <g data-layer="artwork">
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    const titleEl = doc.createElementNS("http://www.w3.org/2000/svg", "title");
+    titleEl.setAttribute("id", "svg-title");
+    titleEl.textContent = title || "Vectorized image";
+    svg.appendChild(titleEl);
+
+    const descEl = doc.createElementNS("http://www.w3.org/2000/svg", "desc");
+    descEl.setAttribute("id", "svg-desc");
+    descEl.textContent = description || "Auto-generated SVG output from the uploaded source image.";
+    svg.appendChild(descEl);
+
+    svg.appendChild(defsEl);
+    svg.appendChild(artworkGroup);
+
+    // Accessibility + aspect-ratio attributes on the root <svg>.
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-labelledby", "svg-title svg-desc");
+    svg.setAttribute("focusable", "false");
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+    return new XMLSerializer()
+      .serializeToString(svg)
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/>\s+</g, "><")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  function createSafeSvg(img, profile) {
+    if (!tracer || typeof tracer.imagedataToSVG !== "function") {
+      throw new Error("Vector tracer is unavailable.");
+    }
+
+    const preset = PRESETS[profile.type] || PRESETS.default;
+    const imgData = getTracingImageData(img, CONFIG.previewTraceMaxDim);
+    const rawSvg = tracer.imagedataToSVG(imgData, createTraceOptions(preset));
+
+    return sanitizeAndOptimizeSvg(rawSvg, {
+      title: "Vectorized image",
+      description: "Auto-generated SVG output from the uploaded source image.",
+    });
+  }
+
+  function renderOriginal(img) {
+    dom.originalPane.innerHTML = "";
+    const wrapper = createEl("div", { className: "zoom-wrapper" });
+    wrapper.appendChild(img);
+    dom.originalPane.appendChild(wrapper);
+  }
+
+  function renderSvg(svgString) {
+    dom.vectorPane.innerHTML = "";
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgString, "image/svg+xml");
+    const svg = doc.documentElement;
+    ensureSvgViewBox(svg);
+
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("height", "100%");
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+    const wrapper = createEl("div", { className: "zoom-wrapper" });
+    wrapper.appendChild(svg);
+    dom.vectorPane.appendChild(wrapper);
+    applyZoomPan();
+  }
+
+  function applyZoomPan() {
+    document.querySelectorAll(".zoom-wrapper").forEach((el) => {
+      el.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
+      el.style.transformOrigin = "center center";
+      el.style.willChange = state.isPanning || state.zoom !== 1 ? "transform" : "auto";
+    });
+
+    if (dom.zoomVal) dom.zoomVal.textContent = `${Math.round(state.zoom * 100)}%`;
+  }
+
+  function resetZoomPan() {
+    state.zoom = 1;
+    state.panX = 0;
+    state.panY = 0;
+    applyZoomPan();
+  }
+
+  function attachPanHandlers(pane) {
+    pane.addEventListener("pointerdown", (event) => {
+      state.isPanning = true;
+      state.pointerId = event.pointerId;
+      state.pointerStartX = event.clientX;
+      state.pointerStartY = event.clientY;
+      state.panStartX = state.panX;
+      state.panStartY = state.panY;
+      pane.setPointerCapture(event.pointerId);
+      pane.style.cursor = "grabbing";
+    });
+
+    pane.addEventListener("pointermove", (event) => {
+      if (!state.isPanning || event.pointerId !== state.pointerId) return;
+      state.panX = state.panStartX + (event.clientX - state.pointerStartX);
+      state.panY = state.panStartY + (event.clientY - state.pointerStartY);
+      requestAnimationFrame(applyZoomPan);
+    });
+
+    const endPan = (event) => {
+      if (event.pointerId !== state.pointerId) return;
+      state.isPanning = false;
+      state.pointerId = null;
+      pane.style.cursor = "";
+      try {
+        pane.releasePointerCapture(event.pointerId);
+      } catch {}
+      applyZoomPan();
+    };
+
+    pane.addEventListener("pointerup", endPan);
+    pane.addEventListener("pointercancel", endPan);
+
+    pane.addEventListener(
+      "wheel",
+      (event) => {
+        event.preventDefault();
+        const delta = event.deltaY < 0 ? CONFIG.zoomStepWheel : -CONFIG.zoomStepWheel;
+        state.zoom = Math.min(CONFIG.maxZoom, Math.max(CONFIG.minZoom, state.zoom + delta));
+        requestAnimationFrame(applyZoomPan);
+      },
+      { passive: false }
+    );
+  }
+
+  function setupZoomPan() {
+    document.querySelectorAll(".comparison-pane").forEach(attachPanHandlers);
+
+    dom.zoomInBtn?.addEventListener("click", () => {
+      state.zoom = Math.min(CONFIG.maxZoom, state.zoom + CONFIG.zoomStepButton);
+      applyZoomPan();
+    });
+
+    dom.zoomOutBtn?.addEventListener("click", () => {
+      state.zoom = Math.max(CONFIG.minZoom, state.zoom - CONFIG.zoomStepButton);
+      applyZoomPan();
+    });
+
+    dom.zoomResetBtn?.addEventListener("click", resetZoomPan);
+  }
+
+  function getUiOptions() {
+    return normalizeTraceConfig({
+      colors: dom.colorsInput?.value,
+      ltres: dom.ltresInput?.value,
+      qtres: dom.qtresInput?.value,
+      pathomit: dom.pathomitInput?.value,
+      blurradius: dom.blurInput?.value,
+      scale: dom.scaleInput?.value,
+      optimize: dom.optimizeInput?.checked,
+      outline: dom.outlineInput?.checked,
+      highQuality: dom.highQualityInput?.checked,
+    });
+  }
+
+  function updateSliderFill(input) {
+    if (!input || input.type !== "range") return;
+    const min = Number(input.min || 0);
+    const max = Number(input.max || 100);
+    const value = Number(input.value);
+    const percent = ((value - min) / (max - min)) * 100;
+    input.style.setProperty("--value", `${percent}%`);
+  }
+
+  function updateControlBadge(input) {
+    const output = document.getElementById(`${input.id}-value`);
+    if (!output) return;
+    output.textContent = input.type === "checkbox" ? (input.checked ? "On" : "Off") : input.value;
+  }
+
+  function scheduleRetrace() {
+    if (state.suppressRetrace || !state.currentImgElement) return;
+    clearTimeout(state.conversionDebounceId);
+    state.conversionDebounceId = window.setTimeout(() => {
+      retraceCurrent();
+    }, 180);
+  }
+
+  function setupSettings() {
     const controls = [
-      colorsInput,
-      ltresInput,
-      qtresInput,
-      pathomitInput,
-      blurInput,
-      scaleInput,
-      optimizeInput,
-      outlineInput,
-      hqInput,
-    ];
+      dom.colorsInput,
+      dom.ltresInput,
+      dom.qtresInput,
+      dom.pathomitInput,
+      dom.blurInput,
+      dom.scaleInput,
+      dom.optimizeInput,
+      dom.outlineInput,
+      dom.highQualityInput,
+    ].filter(Boolean);
 
     controls.forEach((input) => {
-      if (!input) return;
-
-      const triggerChange = () => {
-        // Update display text bubble
-        const displayVal = document.getElementById(input.id + "-value");
-        if (displayVal) {
-          if (input.type === "checkbox") {
-            displayVal.textContent = input.checked ? "On" : "Off";
-          } else {
-            displayVal.textContent = input.value;
-          }
-        }
-
-        // Apply gradient background fill to range sliders
-        if (input.type === "range") {
-          const val = Number(input.value);
-          const min = Number(input.min || 0);
-          const max = Number(input.max || 100);
-          const percent = ((val - min) / (max - min)) * 100;
-          input.style.setProperty("--value", `${percent}%`);
-        }
-
-        clearTimeout(conversionDebounceTimeout);
+      const handler = () => {
+        updateControlBadge(input);
+        updateSliderFill(input);
+        scheduleRetrace();
       };
 
-      input.addEventListener("input", triggerChange);
-      input.addEventListener("change", triggerChange);
-
-      // Initial trigger for slider fills
-      triggerChange();
+      input.addEventListener("input", handler);
+      input.addEventListener("change", handler);
+      handler();
     });
   }
 
-  // --- Metrics Display Updates ---
-  function updateMetricsUI(item) {
-    if (!item) return;
-    metricOriginalSize.textContent = formatBytes(item.originalSize);
-    metricSvgSize.textContent = formatBytes(item.svgSize);
-    metricCompression.textContent = `${item.compressionRatio}x`;
-    metricTime.textContent = item.processingTime ? `${item.processingTime.toFixed(2)}s` : "—";
-    metricColors.textContent = item.colors || "—";
-    metricPaths.textContent = item.paths || "—";
-  }
-
-  // --- Presets Wiring ---
-  function setupPresets() {
-    if (!presetsContainer) return;
-
-    // Default Presets click delegate
-    presetsContainer.addEventListener("click", (e) => {
-      const btn = e.target.closest(".preset-btn[data-preset]");
-      if (!btn) return;
-
-      const name = btn.getAttribute("data-preset");
-      applyPresetValues(name);
-    });
-
-    // Reset settings
-    const resetBtn = $("#preset-reset");
-    if (resetBtn) {
-      resetBtn.addEventListener("click", () => applyPresetValues("default"));
-    }
-
-    // Save Custom Preset
-    const saveBtn = $("#preset-save");
-    if (saveBtn) {
-      saveBtn.addEventListener("click", () => {
-        const name = prompt("Enter a name for your custom preset:", "My Custom Preset");
-        if (!name) return;
-
-        const cleanName = name.trim().replace(/[:"']/g, "");
-        if (!cleanName) return;
-
-        const options = getOptionsFromUI();
-        saveCustomPreset(cleanName, options);
-      });
-    }
-
-    if (customPresetsSelect) {
-      customPresetsSelect.addEventListener("change", (e) => {
-        const val = e.target.value;
-        if (val) applyPresetValues(val);
-      });
-    }
-
-    renderCustomPresetsList();
-  }
-
-  function applyPresetValues(name, options = {}) {
-    const wasSuppressed = suppressRetrace;
-    suppressRetrace = wasSuppressed || !!options.silent;
-    activePresetName = name;
-
-    // Highlight buttons
-    $$(".preset-btn[data-preset]").forEach((btn) => {
-      if (btn.getAttribute("data-preset") === name) {
-        btn.classList.add("active");
-      } else {
-        btn.classList.remove("active");
-      }
-    });
-
-    let config = safeGet(PRESETS, name);
-    if (!config && name === "default") {
-      config = DEFAULTS;
-    }
-
-    // Look up custom preset in localStorage
-    if (!config) {
-      const custom = getCustomPresets();
-      config = safeGet(custom, name);
-    }
-
-    if (!config) {
-      suppressRetrace = wasSuppressed;
-      return;
-    }
-
-    // Apply values to DOM controls
-    updateSlider(colorsInput, config.colors);
-    updateSlider(ltresInput, config.ltres);
-    updateSlider(qtresInput, config.qtres);
-    updateSlider(pathomitInput, config.pathomit);
-    updateSlider(blurInput, config.blurradius);
-    updateSlider(scaleInput, config.scale);
-
-    optimizeInput.checked = config.optimize;
-    optimizeInput.dispatchEvent(new Event("change"));
-
-    outlineInput.checked = config.outline;
-    outlineInput.dispatchEvent(new Event("change"));
-
-    if (config.highQuality !== undefined) {
-      hqInput.checked = config.highQuality;
-      hqInput.dispatchEvent(new Event("change"));
-    }
-
-    suppressRetrace = wasSuppressed;
-  }
-
-  function updateSlider(element, val) {
-    if (!element) return;
-    element.value = val;
-    element.dispatchEvent(new Event("input"));
-  }
-
-  // Local Storage Custom Presets
   function getCustomPresets() {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
-      if (!data) return {};
-      const parsed = JSON.parse(data);
+      const raw = safeStorageGet(CONFIG.storageKey);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== "object") return {};
 
-      const validated = {};
+      const valid = {};
       for (const [key, preset] of Object.entries(parsed)) {
-        if (!preset || typeof preset !== "object") continue;
-        const colors = Number(preset.colors);
-        if (isNaN(colors) || colors < 2 || colors > 32) continue;
-
-        validated[key] = {
-          colors: colors,
-          ltres: isNaN(Number(preset.ltres)) ? 8 : Number(preset.ltres),
-          qtres: isNaN(Number(preset.qtres)) ? 8 : Number(preset.qtres),
-          pathomit: isNaN(Number(preset.pathomit)) ? 15 : Number(preset.pathomit),
-          blurradius: isNaN(Number(preset.blurradius)) ? 0 : Number(preset.blurradius),
-          scale: isNaN(Number(preset.scale)) ? 1.0 : Number(preset.scale),
-          optimize: preset.optimize === undefined ? true : !!preset.optimize,
-          outline: preset.outline === undefined ? true : !!preset.outline,
-          highQuality: preset.highQuality === undefined ? true : !!preset.highQuality,
-        };
+        const normalized = normalizeTraceConfig(preset);
+        if (normalized.colors >= 2 && normalized.colors <= 32) valid[key] = normalized;
       }
-      return validated;
+      return valid;
     } catch {
       return {};
     }
   }
 
   function saveCustomPreset(name, values) {
-    const custom = getCustomPresets();
-    safeSet(custom, name, values);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(custom));
-
-    renderCustomPresetsList();
-    if (customPresetsSelect) customPresetsSelect.value = name;
-    applyPresetValues(name);
+    const presets = getCustomPresets();
+    presets[name] = normalizeTraceConfig(values);
+    safeStorageSet(CONFIG.storageKey, JSON.stringify(presets));
+    renderCustomPresets();
   }
 
-  // Delete Custom Preset from localStorage safely
   function deleteCustomPreset(name) {
-    const custom = getCustomPresets();
-    safeDelete(custom, name);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(custom));
-
-    renderCustomPresetsList();
-    applyPresetValues("default");
+    const presets = getCustomPresets();
+    delete presets[name];
+    safeStorageSet(CONFIG.storageKey, JSON.stringify(presets));
+    renderCustomPresets();
   }
 
-  function renderCustomPresetsList() {
-    if (!customPresetsSelect) return;
+  function applyPreset(name, { silent = false } = {}) {
+    const allCustom = getCustomPresets();
+    const config = PRESETS[name] || allCustom[name];
+    if (!config) return;
 
-    const custom = getCustomPresets();
-    const keys = Object.keys(custom);
+    state.activePresetName = name;
+    state.suppressRetrace = silent;
 
-    customPresetsSelect.innerHTML = '<option value="">Load saved...</option>';
+    dom.colorsInput.value = config.colors;
+    dom.ltresInput.value = config.ltres;
+    dom.qtresInput.value = config.qtres;
+    dom.pathomitInput.value = config.pathomit;
+    dom.blurInput.value = config.blurradius;
+    dom.scaleInput.value = config.scale;
+    dom.optimizeInput.checked = config.optimize;
+    dom.outlineInput.checked = config.outline;
+    dom.highQualityInput.checked = config.highQuality;
 
-    keys.sort().forEach((name) => {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      customPresetsSelect.appendChild(opt);
+    [
+      dom.colorsInput,
+      dom.ltresInput,
+      dom.qtresInput,
+      dom.pathomitInput,
+      dom.blurInput,
+      dom.scaleInput,
+      dom.optimizeInput,
+      dom.outlineInput,
+      dom.highQualityInput,
+    ].forEach((input) => {
+      if (!input) return;
+      updateControlBadge(input);
+      updateSliderFill(input);
     });
 
-    // Render deletion chips / buttons alongside standard ones if needed
-    // In this premium UI, we allow choosing custom options directly in the select element.
-    // If they choose a custom preset, we display a delete chip in the preset bar.
-    const container = $("#custom-preset-actions");
-    if (container) {
-      container.innerHTML = "";
-      keys.forEach((name) => {
-        const chip = document.createElement("div");
-        chip.className = "preset-btn";
-        chip.innerHTML = `
-          <span>★ ${escapeHTML(name)}</span>
-          <button class="preset-delete" type="button" aria-label="Delete preset ${escapeHTML(name)}">×</button>
-        `;
+    dom.presetsContainer?.querySelectorAll(".preset-btn[data-preset]").forEach((btn) => {
+      btn.classList.toggle("active", btn.getAttribute("data-preset") === name);
+    });
 
-        chip.querySelector(".preset-delete").addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (confirm(`Delete custom preset "${name}"?`)) {
-            deleteCustomPreset(name);
-          }
-        });
-
-        chip.addEventListener("click", () => {
-          applyPresetValues(name);
-        });
-
-        container.appendChild(chip);
-      });
-    }
+    state.suppressRetrace = false;
   }
 
-  // --- Utility: Re-run trace at full working-image resolution for final download ---
-  function getFullResolutionSVG() {
-    if (!currentImgElement || !tracer || typeof tracer.imagedataToSVG !== "function") {
-      return currentSvgString;
-    }
-    try {
-      const item = queue.at(currentFileIndex);
-      const config =
-        item && item.assetProfile ? safeGet(PRESETS, item.assetProfile.type) || DEFAULTS : DEFAULTS;
-      const imgData = getTracingImageData(currentImgElement, WORKING_IMAGE_MAX_DIM);
-      return optimizeSvgString(tracer.imagedataToSVG(imgData, createTraceOptions(config)));
-    } catch {
-      return currentSvgString;
-    }
-  }
-
-  // --- Downloads and ZIP Exporter ---
-  function setupDownloads() {
-    if (downloadVectorBtn) {
-      downloadVectorBtn.addEventListener("click", () => {
-        if (!currentImgElement) return;
-
-        // Show processing overlay on the vector pane
-        const overlay = showProcessing(vectorPane, "Preparing SVG export...");
-
-        // Use setTimeout to yield execution so browser renders the loading indicator
-        setTimeout(() => {
-          try {
-            const svgString = getFullResolutionSVG();
-            const blob = new Blob([svgString], { type: "image/svg+xml" });
-            triggerDownload(blob, `${getCurrentFileName()}.svg`);
-          } catch (err) {
-            console.error("SVG download failed:", err);
-            alert("Failed to generate the SVG download.");
-            if (currentSvgString) {
-              const blob = new Blob([currentSvgString], { type: "image/svg+xml" });
-              triggerDownload(blob, `${getCurrentFileName()}.svg`);
-            }
-          } finally {
-            if (overlay) overlay.remove();
-          }
-        }, 50);
-      });
-    }
-
-    if (downloadZipBtn) {
-      downloadZipBtn.addEventListener("click", () => {
-        const completedItems = queue.filter(
-          (item) => item.status === "completed" && item.svgString
+  function renderCustomPresets() {
+    const custom = getCustomPresets();
+    if (dom.presetSelect) {
+      dom.presetSelect.innerHTML = "";
+      dom.presetSelect.appendChild(createEl("option", { value: "", text: "Load saved..." }));
+      Object.keys(custom)
+        .sort()
+        .forEach((name) =>
+          dom.presetSelect.appendChild(createEl("option", { value: name, text: name }))
         );
-        if (!completedItems.length) {
-          alert("No completed SVGs to package.");
-          return;
-        }
+    }
 
-        const files = completedItems.map((item, idx) => {
-          const base = item.file.name.replace(/\.[^/.]+$/, "") || `vector-${idx}`;
-          return {
-            name: `${sanitizeFileName(base)}.svg`,
-            content: item.svgString,
-          };
+    if (dom.customPresetActions) {
+      dom.customPresetActions.innerHTML = "";
+      Object.keys(custom)
+        .sort()
+        .forEach((name) => {
+          const chip = createEl("div", { className: "preset-btn", "data-custom-preset": name });
+          chip.appendChild(createEl("span", { text: `★ ${name}` }));
+          chip.appendChild(
+            createEl("button", {
+              type: "button",
+              className: "preset-delete",
+              "data-delete-preset": name,
+              "aria-label": `Delete preset ${name}`,
+              text: "×",
+            })
+          );
+          dom.customPresetActions.appendChild(chip);
         });
+    }
+  }
 
-        try {
-          const zipBlob = createZipBlob(files);
-          triggerDownload(zipBlob, "vectorized-images.zip");
-        } catch (err) {
-          console.error("ZIP generation failed:", err);
-          alert("Failed to generate ZIP archive: " + err.message);
-        }
+  function setupPresets() {
+    dom.presetsContainer?.addEventListener("click", (event) => {
+      const btn = event.target.closest(".preset-btn[data-preset]");
+      if (!btn) return;
+      applyPreset(btn.getAttribute("data-preset"));
+      scheduleRetrace();
+    });
+
+    dom.presetSelect?.addEventListener("change", (event) => {
+      const name = event.target.value;
+      if (!name) return;
+      applyPreset(name);
+      scheduleRetrace();
+    });
+
+    dom.customPresetActions?.addEventListener("click", (event) => {
+      const deleteBtn = event.target.closest("[data-delete-preset]");
+      if (deleteBtn) {
+        const name = deleteBtn.getAttribute("data-delete-preset");
+        if (window.confirm(`Delete custom preset "${name}"?`)) deleteCustomPreset(name);
+        return;
+      }
+
+      const chip = event.target.closest("[data-custom-preset]");
+      if (chip) {
+        applyPreset(chip.getAttribute("data-custom-preset"));
+        scheduleRetrace();
+      }
+    });
+
+    document.querySelector("#preset-save")?.addEventListener("click", () => {
+      const name = window.prompt("Enter a name for your custom preset:", "My Custom Preset");
+      const cleanName = String(name || "")
+        .trim()
+        .replace(/[:\"']/g, "");
+      if (!cleanName) return;
+      saveCustomPreset(cleanName, getUiOptions());
+      applyPreset(cleanName, { silent: true });
+    });
+
+    document.querySelector("#preset-reset")?.addEventListener("click", () => {
+      applyPreset("default");
+      scheduleRetrace();
+    });
+
+    renderCustomPresets();
+  }
+
+  function setAssetSummary(profile) {
+    if (!dom.assetSummary) return;
+    const typeEl = $(".asset-type", dom.assetSummary);
+    const detailEl = $(".asset-detail", dom.assetSummary);
+    if (!typeEl || !detailEl) return;
+
+    if (!profile) {
+      typeEl.textContent = "No asset loaded";
+      detailEl.textContent = "Upload an image to apply an automatic profile.";
+      return;
+    }
+
+    typeEl.textContent = ASSET_LABELS[profile.type] || "Detected asset";
+    const backgroundNote = profile.removedBackground ? " Background removed." : "";
+    detailEl.textContent =
+      profile.downscaled || profile.removedBackground
+        ? `${profile.originalWidth} × ${profile.originalHeight}px prepared as ${profile.workingWidth} × ${profile.workingHeight}px before vectorizing.${backgroundNote}`
+        : `${profile.width} × ${profile.height}px. Applied the ${profile.type} profile automatically.`;
+  }
+
+  function updateMetrics(item) {
+    if (!item) return;
+    dom.metricOriginalSize.textContent = formatBytes(item.originalSize);
+    dom.metricSvgSize.textContent = formatBytes(item.svgSize);
+    dom.metricCompression.textContent = item.compressionRatio ? `${item.compressionRatio}x` : "—";
+    dom.metricTime.textContent = Number.isFinite(item.processingTime)
+      ? `${item.processingTime.toFixed(2)}s`
+      : "—";
+    dom.metricColors.textContent = item.colors || "—";
+    dom.metricPaths.textContent = item.paths || "—";
+  }
+
+  function getCurrentItem() {
+    return state.queue[state.currentFileIndex] || null;
+  }
+
+  function updateQueueUi() {
+    if (!dom.queueList) return;
+    dom.batchQueueSection?.classList.toggle("hidden", state.queue.length === 0);
+
+    dom.queueList.innerHTML = "";
+    state.queue.forEach((item, index) => {
+      const row = createEl("div", {
+        className: `queue-item ${item.status} ${index === state.currentFileIndex ? "processing" : ""}`,
+        "data-index": index,
       });
+
+      const info = createEl("div", { className: "queue-info" });
+      info.appendChild(createEl("span", { className: "queue-filename", text: item.file.name }));
+
+      const status =
+        item.status === "completed"
+          ? `Done (${item.compressionRatio || "—"}x)`
+          : item.status === "processing"
+            ? "Converting..."
+            : item.status === "error"
+              ? "Failed"
+              : "Waiting...";
+
+      const statusEl = createEl("span", { className: "queue-status", text: status });
+      if (item.status === "error" && item.errorMessage) {
+        statusEl.title = item.errorMessage;
+      }
+      info.appendChild(statusEl);
+
+      const actions = createEl("div", { className: "queue-actions" });
+      actions.appendChild(
+        createEl("button", {
+          type: "button",
+          className: "btn btn-accent btn-small",
+          "data-action": "view",
+          "data-index": index,
+          text: "View",
+        })
+      );
+      actions.appendChild(
+        createEl("button", {
+          type: "button",
+          className: "btn btn-small btn-secondary",
+          "data-action": "delete",
+          "data-index": index,
+          text: "×",
+          "aria-label": `Delete ${item.file.name}`,
+        })
+      );
+
+      row.append(info, actions);
+      dom.queueList.appendChild(row);
+    });
+  }
+
+  function showErrorInPanes(message) {
+    dom.originalPane.innerHTML = "";
+    dom.vectorPane.innerHTML = "";
+
+    const originalError = createEl("div", {
+      className: "preview-placeholder error-message",
+      role: "alert",
+    });
+    originalError.append(
+      createEl("h4", { text: "Image Load Error" }),
+      createEl("p", { text: message })
+    );
+
+    const vectorError = createEl("div", { className: "preview-placeholder error-message" });
+    vectorError.append(
+      createEl("h4", { text: "Conversion Halted" }),
+      createEl("p", { text: "Please resolve the loading error to proceed." })
+    );
+
+    dom.originalPane.appendChild(originalError);
+    dom.vectorPane.appendChild(vectorError);
+    dom.downloadOptions?.classList.add("hidden");
+  }
+
+  async function computeColors(imgEl) {
+    try {
+      const maxSample = 120;
+      const w = imgEl.naturalWidth || imgEl.width;
+      const h = imgEl.naturalHeight || imgEl.height;
+      const sw = Math.min(maxSample, w);
+      const sh = Math.min(Math.max(1, Math.round((h / w) * sw)), maxSample);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = sw;
+      canvas.height = sh;
+
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(imgEl, 0, 0, sw, sh);
+
+      const data = ctx.getImageData(0, 0, sw, sh).data;
+      const set = new Set();
+
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] === 0) continue;
+        const key =
+          (((data[i] >> 3) & 31) << 10) |
+          (((data[i + 1] >> 3) & 31) << 5) |
+          ((data[i + 2] >> 3) & 31);
+        set.add(key);
+      }
+
+      cleanupCanvas(canvas);
+      return set.size;
+    } catch {
+      return 0;
     }
   }
 
-  function sanitizeFileName(name) {
-    if (!name) return "vectorized-file";
-    let cleaned = name.replace(/[\\/:*?"<>|]/g, "_").trim();
-    return cleaned || "vectorized-file";
+  async function processQueueItem(index) {
+    if (index < 0 || index >= state.queue.length) return;
+
+    state.activeJobToken += 1;
+    const jobToken = state.activeJobToken;
+    state.currentFileIndex = index;
+
+    const item = getCurrentItem();
+    updateQueueUi();
+
+    dom.originalPane.innerHTML = '<div class="preview-placeholder">Loading original...</div>';
+    dom.vectorPane.innerHTML = '<div class="preview-placeholder">Vectorizing...</div>';
+    dom.downloadOptions?.classList.add("hidden");
+
+    try {
+      await validateImageFile(item.file);
+      if (jobToken !== state.activeJobToken) return;
+
+      const fileData = await readFileIfTiff(item.file);
+      if (jobToken !== state.activeJobToken) return;
+
+      const workingImage = await loadWorkingImage(item.file, fileData);
+      if (jobToken !== state.activeJobToken) {
+        cleanupImage(workingImage.img);
+        return;
+      }
+
+      if (state.currentImgElement) cleanupImage(state.currentImgElement);
+      state.currentImgElement = workingImage.img;
+
+      renderOriginal(workingImage.img);
+
+      if (!item.assetProfile) {
+        item.assetProfile = detectAssetProfile(workingImage.img);
+        Object.assign(item.assetProfile, {
+          originalWidth: workingImage.originalWidth,
+          originalHeight: workingImage.originalHeight,
+          workingWidth: workingImage.workingWidth,
+          workingHeight: workingImage.workingHeight,
+          downscaled: workingImage.downscaled,
+          removedBackground: workingImage.removedBackground,
+        });
+      }
+
+      setAssetSummary(item.assetProfile);
+      applyPreset(item.assetProfile.type, { silent: true });
+
+      if (item.status === "completed" && item.svgString) {
+        state.currentSvgString = item.svgString;
+        renderSvg(item.svgString);
+        updateMetrics(item);
+        dom.downloadOptions?.classList.remove("hidden");
+        resetZoomPan();
+        return;
+      }
+
+      item.status = "processing";
+      updateQueueUi();
+
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const start = performance.now();
+
+      const svgString = createSafeSvg(workingImage.img, item.assetProfile);
+      if (jobToken !== state.activeJobToken) return;
+
+      state.currentSvgString = svgString;
+      renderSvg(svgString);
+
+      const svgDoc = new DOMParser().parseFromString(svgString, "image/svg+xml");
+      const svgSize = new Blob([svgString], { type: "image/svg+xml" }).size;
+
+      item.svgString = svgString;
+      item.svgSize = svgSize;
+      item.status = "completed";
+      item.processingTime = (performance.now() - start) / 1000;
+      item.paths = svgDoc.querySelectorAll("path").length;
+      item.colors = await computeColors(workingImage.img);
+      item.compressionRatio = svgSize > 0 ? (item.originalSize / svgSize).toFixed(1) : null;
+
+      if (jobToken !== state.activeJobToken) return;
+
+      updateMetrics(item);
+      updateQueueUi();
+      dom.downloadOptions?.classList.remove("hidden");
+      resetZoomPan();
+      announce(`Finished vectorizing ${item.file.name}.`);
+    } catch (error) {
+      if (jobToken !== state.activeJobToken) return;
+      item.status = "error";
+      item.errorMessage = error.message || "Unknown error.";
+      updateQueueUi();
+      showErrorInPanes(item.errorMessage);
+      announce(`Failed to process ${item.file.name}.`);
+    }
   }
 
-  function getCurrentFileName() {
-    const activeItem = queue.at(currentFileIndex);
-    if (currentFileIndex !== -1 && activeItem) {
-      const base = activeItem.file.name.replace(/\.[^/.]+$/, "");
-      return sanitizeFileName(base);
+  async function handleFiles(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+
+    showWorkspace();
+
+    state.queue = files.slice(0, 1).map((file) => ({
+      file,
+      status: "pending",
+      svgString: "",
+      originalSize: file.size,
+      svgSize: 0,
+      paths: 0,
+      colors: 0,
+      compressionRatio: null,
+      assetProfile: null,
+      processingTime: null,
+      errorMessage: "",
+    }));
+
+    state.currentFileIndex = -1;
+    state.currentSvgString = "";
+    updateQueueUi();
+
+    await processQueueItem(0);
+  }
+
+  function removeQueueItem(index) {
+    const removed = state.queue.splice(index, 1)[0];
+    if (removed && index === state.currentFileIndex) {
+      if (state.currentImgElement) {
+        cleanupImage(state.currentImgElement);
+        state.currentImgElement = null;
+      }
+      state.currentSvgString = "";
+      state.currentFileIndex = state.queue.length ? 0 : -1;
+      dom.originalPane.innerHTML =
+        '<div class="preview-placeholder">Upload an image to begin</div>';
+      dom.vectorPane.innerHTML = '<div class="preview-placeholder">SVG will appear here</div>';
+      dom.downloadOptions?.classList.add("hidden");
+      setAssetSummary(null);
+    } else if (state.currentFileIndex > index) {
+      state.currentFileIndex -= 1;
     }
-    return "vectorized-image";
+
+    updateQueueUi();
+    if (state.currentFileIndex >= 0) processQueueItem(state.currentFileIndex);
+  }
+
+  async function retraceCurrent() {
+    const item = getCurrentItem();
+    if (!item || !state.currentImgElement) return;
+
+    state.activeJobToken += 1;
+    const jobToken = state.activeJobToken;
+
+    dom.vectorPane.style.opacity = "0.6";
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    try {
+      const start = performance.now();
+      const imgData = getTracingImageData(state.currentImgElement, CONFIG.previewTraceMaxDim);
+      const svgString = sanitizeAndOptimizeSvg(
+        tracer.imagedataToSVG(imgData, createTraceOptions(getUiOptions())),
+        {
+          title: "Vectorized image",
+          description: "Auto-generated SVG output from the uploaded source image.",
+        }
+      );
+
+      if (jobToken !== state.activeJobToken) return;
+
+      state.currentSvgString = svgString;
+      item.svgString = svgString;
+      item.svgSize = new Blob([svgString], { type: "image/svg+xml" }).size;
+      item.processingTime = (performance.now() - start) / 1000;
+      item.paths = new DOMParser()
+        .parseFromString(svgString, "image/svg+xml")
+        .querySelectorAll("path").length;
+      item.compressionRatio =
+        item.svgSize > 0 ? (item.originalSize / item.svgSize).toFixed(1) : null;
+
+      renderSvg(svgString);
+      updateMetrics(item);
+      applyZoomPan();
+    } catch (error) {
+      console.warn("Retrace failed:", error);
+    } finally {
+      dom.vectorPane.style.opacity = "1";
+    }
+  }
+
+  function getFullResolutionSvg() {
+    if (!state.currentImgElement || !tracer || typeof tracer.imagedataToSVG !== "function") {
+      return state.currentSvgString;
+    }
+
+    const item = getCurrentItem();
+    const profileType = item?.assetProfile?.type || "default";
+    const preset = PRESETS[profileType] || PRESETS.default;
+
+    try {
+      const imgData = getTracingImageData(state.currentImgElement, CONFIG.workingImageMaxDim);
+      return sanitizeAndOptimizeSvg(tracer.imagedataToSVG(imgData, createTraceOptions(preset)), {
+        title: "Vectorized image",
+        description: "Auto-generated SVG output from the uploaded source image.",
+      });
+    } catch {
+      return state.currentSvgString;
+    }
   }
 
   function triggerDownload(blob, filename) {
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
+    const a = createEl("a", { href: url, download: filename });
     document.body.appendChild(a);
     a.click();
-
-    // Clean up
     setTimeout(() => {
-      document.body.removeChild(a);
+      a.remove();
       URL.revokeObjectURL(url);
     }, 100);
   }
 
-  // --- Initial Bindings ---
-  function init() {
-    initTheme();
-    setupAppFlow();
-    setupZoomPanEvents();
-    setupFileInputs();
-    setupSettingsEvents();
-    setupPresets();
-    setupDownloads();
+  function setupDownloads() {
+    dom.downloadVectorBtn?.addEventListener("click", () => {
+      const item = getCurrentItem();
+      if (!item) return;
+      const svgString = getFullResolutionSvg();
+      triggerDownload(
+        new Blob([svgString], { type: "image/svg+xml" }),
+        `${sanitizeFileName(item.file.name.replace(/\.[^/.]+$/, ""))}.svg`
+      );
+    });
 
-    // Prevent default drag window freezes
-    window.addEventListener("dragover", (e) => e.preventDefault());
-    window.addEventListener("drop", (e) => e.preventDefault());
+    dom.downloadZipBtn?.addEventListener("click", () => {
+      const complete = state.queue.filter((item) => item.status === "completed" && item.svgString);
+      if (!complete.length) return;
 
-    // Preload defaults
-    applyPresetValues("logo");
+      const files = complete.map((item, index) => ({
+        name: `${sanitizeFileName(item.file.name.replace(/\.[^/.]+$/, "") || `vector-${index}`)}.svg`,
+        content: item.svgString,
+      }));
+
+      const zipBlob = createZipBlob(files);
+      triggerDownload(zipBlob, "vectorized-images.zip");
+    });
   }
 
-  // Kick off application logic
-  document.addEventListener("DOMContentLoaded", init);
+  function setupFileInputs() {
+    if (!dom.dropZone || !dom.fileInput) return;
+
+    const highlight = () => dom.dropZone.classList.add("highlight");
+    const unhighlight = () => dom.dropZone.classList.remove("highlight");
+
+    ["dragenter", "dragover"].forEach((type) => {
+      dom.dropZone.addEventListener(type, (event) => {
+        event.preventDefault();
+        highlight();
+      });
+    });
+
+    ["dragleave", "dragend", "drop"].forEach((type) => {
+      dom.dropZone.addEventListener(type, (event) => {
+        event.preventDefault();
+        unhighlight();
+      });
+    });
+
+    dom.dropZone.setAttribute("tabindex", "0");
+    dom.dropZone.setAttribute("role", "button");
+    dom.dropZone.setAttribute("aria-label", "Upload images. Drag and drop or click to browse.");
+
+    dom.dropZone.addEventListener("click", () => dom.fileInput.click());
+    dom.dropZone.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        dom.fileInput.click();
+      }
+    });
+
+    dom.dropZone.addEventListener("drop", (event) => {
+      const files = event.dataTransfer?.files;
+      if (files?.length) handleFiles(files);
+    });
+
+    dom.fileInput.addEventListener("change", (event) => {
+      const files = event.target.files;
+      if (files?.length) handleFiles(files);
+    });
+
+    window.addEventListener("paste", (event) => {
+      const items = Array.from(event.clipboardData?.items || []);
+      const imageFiles = items
+        .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+        .map((item) => item.getAsFile())
+        .filter(Boolean);
+
+      if (imageFiles.length) handleFiles(imageFiles);
+    });
+
+    window.addEventListener("dragover", (event) => event.preventDefault());
+    window.addEventListener("drop", (event) => event.preventDefault());
+  }
+
+  function setupQueueActions() {
+    dom.queueList?.addEventListener("click", (event) => {
+      const btn = event.target.closest("[data-action]");
+      if (!btn) return;
+      const index = Number(btn.getAttribute("data-index"));
+      const action = btn.getAttribute("data-action");
+
+      if (action === "view") processQueueItem(index);
+      if (action === "delete") removeQueueItem(index);
+    });
+  }
+
+  function setupAppFlow() {
+    dom.enterAppBtn?.addEventListener("click", () => {
+      showWorkspace();
+      announce("Workspace ready. Upload an image to begin.");
+    });
+  }
+
+  function init() {
+    if (!tracer) {
+      console.error("ImageTracer is unavailable.");
+      return;
+    }
+
+    initTheme();
+    setupAppFlow();
+    setupZoomPan();
+    setupFileInputs();
+    setupSettings();
+    setupPresets();
+    setupQueueActions();
+    setupDownloads();
+    applyPreset("logo", { silent: true });
+  }
+
+  document.addEventListener("DOMContentLoaded", init, { once: true });
 })();
