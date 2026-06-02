@@ -700,7 +700,7 @@ import { createZipBlob } from "./zip-helper.js";
       layering: 0,
       linefilter: true,
       rightangleenhance: true,
-      roundcoords: normalized.highQuality ? 2 : 1,
+      roundcoords: normalized.highQuality ? 1 : 0,
       desc: false,
       viewbox: true,
       strokewidth: 0,
@@ -813,6 +813,15 @@ import { createZipBlob } from "./zip-helper.js";
         return;
       }
 
+      // Paths with fewer than 10 path commands are isolated speckle dots
+      // (typically 4–7 commands). Glyph counter-shapes and real regions
+      // always produce 10+ commands, so this threshold is safe.
+      const commandCount = (d.match(/[MLHVCSQTAZmlhvcsqtaz]/g) || []).length;
+      if (commandCount < 10) {
+        path.remove();
+        return;
+      }
+
       const effectivelyInvisible =
         display === "none" ||
         visibility === "hidden" ||
@@ -843,6 +852,34 @@ import { createZipBlob } from "./zip-helper.js";
     artworkGroup.setAttribute("fill", "none");
     artworkNodes.forEach((n) => artworkGroup.appendChild(n));
 
+    // Merge consecutive <path> elements that share the same fill value.
+    // ImageTracer with layering:0 emits one full color layer at a time, so
+    // same-fill paths are always contiguous. Combining their `d` attributes
+    // into a single multi-subpath path preserves rendering order while
+    // drastically reducing path count (often 10–50×).
+    {
+      let mergeFill = null;
+      let mergeTarget = null;
+      for (const child of [...artworkGroup.children]) {
+        if (child.tagName.toLowerCase() !== "path") {
+          mergeTarget = null;
+          mergeFill = null;
+          continue;
+        }
+        const fill = child.getAttribute("fill") ?? "";
+        if (fill === mergeFill && mergeTarget) {
+          const addedD = (child.getAttribute("d") || "").trim();
+          if (addedD) {
+            mergeTarget.setAttribute("d", mergeTarget.getAttribute("d") + " " + addedD);
+          }
+          child.remove();
+        } else {
+          mergeTarget = child;
+          mergeFill = fill;
+        }
+      }
+    }
+
     // Build the <defs> element (empty when ImageTracer produces no gradients/clips).
     const defsEl = existingDefs || doc.createElementNS("http://www.w3.org/2000/svg", "defs");
 
@@ -872,6 +909,8 @@ import { createZipBlob } from "./zip-helper.js";
     return new XMLSerializer()
       .serializeToString(svg)
       .replace(/<!--[\s\S]*?-->/g, "")
+      // Strip trailing zeros from decimal path coordinates: 1.50→1.5, 2.00→2
+      .replace(/(\d+\.\d*[1-9])0+|(\d+)\.0+/g, (_, a, b) => a ?? b)
       .replace(/>\s+</g, "><")
       .replace(/\s{2,}/g, " ")
       .trim();
