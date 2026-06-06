@@ -3092,6 +3092,11 @@ import { createZipBlob } from "./zip-helper.js";
     showWorkspace();
     updateQueueUi();
 
+    // Reset file input value so selecting the same file triggers the change event again
+    if (dom.fileInput) {
+      dom.fileInput.value = "";
+    }
+
     await processQueueSequentially(0);
   }
 
