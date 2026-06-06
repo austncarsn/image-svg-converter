@@ -2,3 +2,8 @@ node_modules/
 dist/
 .DS_Store
 *.local
+test-quantize.js
+test-vtracer.js
+cooke-mike.png
+shrimp-logo.svg
+AGENTS

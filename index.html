@@ -1,150 +1,78 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
     <meta
       name="description"
       content="Convert PNG, JPEG, BMP, and TIFF images into stable SVG exports with automatic asset detection and browser-safe processing."
     />
-    <meta name="theme-color" content="#517c96" />
-
-    <!-- Prevent dark mode flash of unstyled content -->
+    <meta name="theme-color" content="#F7F6F2" />
     <meta name="color-scheme" content="light dark" />
+
     <script>
-      {
-        const theme = localStorage.getItem("theme-color-scheme") || "system";
-        let resolved = theme;
-        if (theme === "system") {
-          resolved = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      (() => {
+        const STORAGE_KEY = "theme-color-scheme";
+        const DEFAULT_THEME = "system";
+
+        try {
+          const savedTheme = localStorage.getItem(STORAGE_KEY) || DEFAULT_THEME;
+          const prefersDark =
+            window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+          const resolvedTheme =
+            savedTheme === "system" ? (prefersDark ? "dark" : "light") : savedTheme;
+
+          document.documentElement.setAttribute("data-theme", resolvedTheme);
+          document.documentElement.style.colorScheme = resolvedTheme;
+        } catch {
+          document.documentElement.setAttribute("data-theme", "light");
+          document.documentElement.style.colorScheme = "light";
         }
-        document.documentElement.setAttribute("data-theme", resolved);
-        document.documentElement.style.colorScheme = resolved;
-      }
+      })();
     </script>
 
     <title>Precision Image to SVG Vector Converter</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Urbanist:wght@200;300;400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
 
-    <!-- Local module assets -->
     <link rel="stylesheet" href="./src/style.css" />
 
-    <!-- External utilities via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/tiff.js@0.4.0/dist/tiff.min.js" defer></script>
     <script type="module" src="./src/main.js" defer></script>
   </head>
+
   <body>
-    <!-- Top Navigation Header -->
-    <nav class="top-nav" aria-label="Main Navigation">
-      <div class="nav-container">
-        <div class="brand">
-          <!-- SVG branding icon -->
-          <svg
-            class="brand-logo"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path
-              d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
-            />
-            <path d="M12 18L12 6" />
-            <path d="M18 12L6 12" />
-            <path d="M16 8L20 12L16 16" />
-            <path d="M8 8L4 12L8 16" />
-          </svg>
-          <span>VectorStudio</span>
-        </div>
-        <div class="nav-actions">
-          <!-- Theme toggle switch -->
-          <button
-            id="theme-toggle"
-            class="theme-btn"
-            type="button"
-            aria-label="Toggle dark theme"
-            title="Switch Theme"
-          ></button>
-        </div>
+    <header class="site-header">
+      <div class="header-shell">
+        <nav class="top-nav" aria-label="Main navigation">
+          <div class="nav-container">
+            <a class="brand" href="#workspace-intake" aria-label="VectorStudio home">
+              <span>VectorStudio</span>
+            </a>
+
+            <div class="nav-actions">
+              <button
+                id="theme-toggle"
+                class="theme-btn header-theme-btn"
+                type="button"
+                aria-label="Toggle color theme"
+                title="Toggle color theme"
+              ></button>
+            </div>
+          </div>
+        </nav>
       </div>
-    </nav>
+    </header>
 
-    <!-- Main Content Wrapper -->
     <main id="app">
-      <section id="welcome-screen" class="welcome-screen" aria-labelledby="welcome-title">
-        <div class="welcome-copy">
-          <p class="eyebrow">Local raster-to-vector workspace</p>
-          <h1 id="welcome-title">Image to SVG Converter</h1>
-          <p class="welcome-summary">
-            Convert PNG, JPEG, BMP, and TIFF assets into SVG files with automatic asset detection,
-            stable previews, and browser-safe export behavior.
-          </p>
-          <div class="welcome-actions">
-            <button id="enter-app-btn" class="btn btn-primary btn-large" type="button">
-              Enter Workspace
-            </button>
-          </div>
-        </div>
-        <div class="welcome-panel" aria-label="Application capabilities">
-          <div class="capability-item">
-            <span class="capability-label">Detects</span>
-            <strong>logo, photo, drawing, or line art</strong>
-          </div>
-          <div class="capability-item">
-            <span class="capability-label">Protects</span>
-            <strong>browser-safe conversion limits</strong>
-          </div>
-          <div class="capability-item">
-            <span class="capability-label">Exports</span>
-            <strong>traced vector SVG output</strong>
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="workspace-intake"
-        class="workspace-intake hidden"
-        aria-labelledby="workspace-title"
-      >
-        <header class="page-header" id="main-content">
-          <h1 id="workspace-title">Prepare an Asset</h1>
-          <p class="subtitle">
-            Upload an image and VectorStudio will choose the closest tracing profile before
-            conversion.
-          </p>
-        </header>
-
-        <!-- Upload Dropzone -->
-        <div id="drop-zone" class="card">
-          <svg
-            class="drop-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
-          <h2 class="drop-text">Drag and drop images here</h2>
-          <p class="drop-hint">PNG, JPEG, BMP, or TIFF supported</p>
-        </div>
-      </section>
-
-      <!-- Hidden native file input -->
       <input
         type="file"
         id="file-input"
@@ -152,299 +80,700 @@
         hidden
       />
 
-      <!-- Dynamic Application Area (hidden until image is loaded) -->
-      <div id="app-grid" class="app-grid hidden">
-        <!-- Sidebar panels (Settings, Queue, Stats) -->
-        <aside class="sidebar">
-          <!-- Presets card -->
-          <section class="card" aria-labelledby="presets-title">
-            <h3 class="card-title" id="presets-title">Presets</h3>
-            <div id="asset-summary" class="asset-summary" aria-live="polite">
-              <span class="asset-type">No asset loaded</span>
-              <span class="asset-detail">Upload an image to apply an automatic profile.</span>
+      <section
+        id="welcome-screen"
+        class="landing-screen landing-editorial"
+        aria-labelledby="landing-title"
+      >
+        <div class="landing-grid">
+          <div class="landing-copy">
+            <p class="landing-kicker">Local browser-based conversion</p>
+            <h1 id="landing-title">Turn images into clean SVGs</h1>
+            <p class="landing-summary">
+              Upload an image, preview the vector result, adjust the preset, and export an SVG — fast, private, and entirely in your browser.
+            </p>
+
+            <div class="landing-trust-row">
+              <span class="trust-item">Local only</span>
+              <span class="trust-item">No signup</span>
+              <span class="trust-item">Clipboard paste</span>
+              <span class="trust-item">SVG export</span>
             </div>
-            <div class="presets-section hidden">
-              <div class="presets-container" id="presets-container">
-                <button class="preset-btn" type="button" data-preset="logo">✦ Logo</button>
-                <button class="preset-btn" type="button" data-preset="photo">◉ Photo</button>
-                <button class="preset-btn" type="button" data-preset="drawing">✎ Drawing</button>
-                <button class="preset-btn" type="button" data-preset="lineart">⟲ Line Art</button>
-                <button
-                  class="preset-btn preset-save-btn"
-                  id="preset-save"
-                  type="button"
-                  title="Save current values as new preset"
+          </div>
+
+          <div class="landing-visual" aria-hidden="false">
+            <div class="landing-upload-card">
+              <button
+                id="landing-drop-zone"
+                class="landing-drop-zone"
+                type="button"
+                aria-describedby="landing-drop-hint"
+              >
+                <svg
+                  class="landing-drop-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
                 >
-                  + Save
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+
+                <div class="landing-drop-content">
+                  <span class="landing-drop-title">Drop an image here</span>
+                  <span id="landing-drop-hint" class="landing-drop-hint">
+                    PNG, JPEG, BMP, TIFF supported
+                  </span>
+                  <span class="landing-drop-subhint">or click to browse</span>
+                </div>
+              </button>
+
+              <div class="landing-upload-actions">
+                <button id="landing-browse-btn" class="btn btn-primary btn-large" type="button">
+                  Upload Image
+                </button>
+                <button id="enter-app-btn" class="btn btn-secondary btn-large" type="button">
+                  Open Workspace
                 </button>
               </div>
+            </div>
 
-              <div
-                id="custom-preset-actions"
-                class="presets-container"
-                style="
-                  margin-top: 12px;
-                  border-top: 1px solid var(--border-color);
-                  padding-top: 12px;
-                "
-              >
-                <!-- Saved custom preset chips will append here -->
-              </div>
+            <div class="landing-visual-foot">
+              <p class="landing-cta-hint">Tip: you can also paste images from your clipboard.</p>
+            </div>
+          </div>
+        </div>
 
-              <div class="preset-select-group" style="margin-top: 12px">
-                <label for="preset-select">Quick Select:</label>
-                <select id="preset-select" class="preset-select">
-                  <option value="">Load saved...</option>
-                </select>
-              </div>
+        <section class="landing-steps-section" aria-label="How it works">
+          <div class="landing-step">
+            <span class="step-num">1</span>
+            <div class="step-content">
+              <h3>Upload image</h3>
+              <p>Drop or paste files locally</p>
+            </div>
+          </div>
+          <div class="landing-step">
+            <span class="step-num">2</span>
+            <div class="step-content">
+              <h3>Tune preset</h3>
+              <p>Adjust colors and fidelity</p>
+            </div>
+          </div>
+          <div class="landing-step">
+            <span class="step-num">3</span>
+            <div class="step-content">
+              <h3>Export SVG</h3>
+              <p>Save clean editable paths</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-value-badges" aria-label="Core benefits">
+          <div class="value-badge-card">
+            <svg class="value-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <div class="value-badge-text">
+              <h3>Private by default</h3>
+              <p>Runs locally in your browser</p>
+            </div>
+          </div>
+          <div class="value-badge-card">
+            <svg class="value-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            <div class="value-badge-text">
+              <h3>Fast previews</h3>
+              <p>Preset-based vector tuning</p>
+            </div>
+          </div>
+          <div class="value-badge-card">
+            <svg class="value-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+            <div class="value-badge-text">
+              <h3>Editable output</h3>
+              <p>Real SVG paths when possible</p>
+            </div>
+          </div>
+        </section>
+
+
+      </section>
+
+      <!-- ConverterShell -->
+      <section
+        id="app-grid"
+        class="converter-shell app-grid hidden"
+        aria-label="VectorStudio editor workstation"
+      >
+        <div class="mobile-panel-tabs" role="tablist" aria-label="Workspace panels">
+          <button
+            class="mobile-panel-tab active"
+            type="button"
+            data-panel-target="source"
+            aria-current="true"
+          >
+            Source
+          </button>
+          <button class="mobile-panel-tab" type="button" data-panel-target="preview">
+            Preview
+          </button>
+          <button class="mobile-panel-tab" type="button" data-panel-target="presets">
+            Presets
+          </button>
+          <button class="mobile-panel-tab" type="button" data-panel-target="export">Export</button>
+        </div>
+
+        <!-- SourceRail -->
+        <aside
+          id="workspace-intake"
+          class="source-rail workspace-intake"
+          aria-labelledby="source-title"
+        >
+          <div class="rail-header">
+            <p class="rail-kicker">Source</p>
+            <h1 id="source-title">VectorStudio</h1>
+          </div>
+
+          <button
+            id="drop-zone"
+            class="drop-zone source-dropzone"
+            type="button"
+            aria-describedby="drop-zone-hint"
+            data-state="idle"
+          >
+            <svg
+              class="drop-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+
+            <span class="drop-text">Upload image</span>
+            <span id="drop-zone-hint" class="drop-hint">PNG, JPEG, BMP, TIFF</span>
+            <span class="drop-status" aria-live="polite" aria-atomic="true"></span>
+          </button>
+
+          <section class="source-panel" aria-labelledby="source-meta-title">
+            <h2 class="panel-title" id="source-meta-title">Current File</h2>
+            <div id="asset-summary" class="asset-summary" aria-live="polite">
+              <span class="asset-type">No asset loaded</span>
+              <span class="asset-detail">Your source image will appear here.</span>
+              <span class="comfort-note" style="display: none"></span>
+              <span class="strategy-badge" style="display: none"></span>
             </div>
           </section>
 
-          <!-- Vector settings card -->
-          <section class="card hidden" aria-labelledby="settings-title">
-            <div class="settings-header-action">
-              <h3 class="card-title" id="settings-title" style="margin-bottom: 0">
-                Vector Settings
-              </h3>
-              <label class="high-quality-toggle" for="high-quality">
-                <input type="checkbox" id="high-quality" checked />
-                <span>HQ Mode</span>
-              </label>
-            </div>
-
-            <div class="settings-list">
-              <!-- Colors setting -->
-              <div class="setting-item">
-                <label for="numberofcolors">
-                  <span class="label-text">
-                    Number of Colors
-                    <span
-                      class="tooltip-icon"
-                      data-tooltip="Total number of color clusters used in the output SVG vector."
-                      >?</span
-                    >
-                  </span>
-                  <span class="setting-val" id="numberofcolors-value">4</span>
-                </label>
-                <input type="range" id="numberofcolors" min="2" max="32" value="4" />
-              </div>
-
-              <!-- Line smoothness setting -->
-              <div class="setting-item">
-                <label for="ltres">
-                  <span class="label-text">
-                    Line Smoothness
-                    <span
-                      class="tooltip-icon"
-                      data-tooltip="Linear interpolation threshold. Higher = smoother straight lines."
-                      >?</span
-                    >
-                  </span>
-                  <span class="setting-val" id="ltres-value">8</span>
-                </label>
-                <input type="range" id="ltres" min="0" max="20" step="1" value="8" />
-              </div>
-
-              <!-- Curve smoothness setting -->
-              <div class="setting-item">
-                <label for="qtres">
-                  <span class="label-text">
-                    Curve Smoothness
-                    <span
-                      class="tooltip-icon"
-                      data-tooltip="Quadratic spline interpolation threshold. Higher = smoother rounded corners."
-                      >?</span
-                    >
-                  </span>
-                  <span class="setting-val" id="qtres-value">8</span>
-                </label>
-                <input type="range" id="qtres" min="0" max="20" step="1" value="8" />
-              </div>
-
-              <!-- Detail filter setting -->
-              <div class="setting-item">
-                <label for="pathomit">
-                  <span class="label-text">
-                    Detail Filter
-                    <span
-                      class="tooltip-icon"
-                      data-tooltip="Remove path anchors smaller than this pixel area. Removes noise."
-                      >?</span
-                    >
-                  </span>
-                  <span class="setting-val" id="pathomit-value">15</span>
-                </label>
-                <input type="range" id="pathomit" min="0" max="100" value="15" />
-              </div>
-
-              <!-- Edge smoothing setting -->
-              <div class="setting-item">
-                <label for="blurradius">
-                  <span class="label-text">
-                    Edge Smoothing
-                    <span
-                      class="tooltip-icon"
-                      data-tooltip="Applies a Gaussian blur preprocessing pass to smooth high-contrast pixel edges."
-                      >?</span
-                    >
-                  </span>
-                  <span class="setting-val" id="blurradius-value">0</span>
-                </label>
-                <input type="range" id="blurradius" min="0" max="20" step="1" value="0" />
-              </div>
-
-              <!-- Scale setting -->
-              <div class="setting-item">
-                <label for="scale">
-                  <span class="label-text">
-                    Output Scale
-                    <span class="tooltip-icon" data-tooltip="Output scaling factor multiplier."
-                      >?</span
-                    >
-                  </span>
-                  <span class="setting-val" id="scale-value">1.0</span>
-                </label>
-                <input type="range" id="scale" min="0.5" max="3.0" step="0.1" value="1.0" />
-              </div>
-
-              <!-- Path optimization toggle -->
-              <div class="switch-container">
-                <span class="label-text" style="font-size: 0.85rem; font-weight: 500">
-                  Path Optimization
-                  <span
-                    class="tooltip-icon"
-                    data-tooltip="Merges continuous straight paths and redundant coordinate nodes."
-                    >?</span
-                  >
-                </span>
-                <label class="switch" for="path-optimize">
-                  <input type="checkbox" id="path-optimize" checked />
-                  <span class="slider"></span>
-                </label>
-              </div>
-
-              <!-- Outline mode toggle -->
-              <div class="switch-container">
-                <span class="label-text" style="font-size: 0.85rem; font-weight: 500">
-                  Outline Mode
-                  <span
-                    class="tooltip-icon"
-                    data-tooltip="Converts paths to stroked lines instead of solid color fills. Ideal for drawings."
-                    >?</span
-                  >
-                </span>
-                <label class="switch" for="outline-mode">
-                  <input type="checkbox" id="outline-mode" checked />
-                  <span class="slider"></span>
-                </label>
-              </div>
-
-              <button
-                id="preset-reset"
-                class="btn btn-secondary btn-small"
-                type="button"
-                style="margin-top: 8px; justify-content: center"
-              >
-                Reset Settings
-              </button>
-            </div>
-          </section>
-
-          <!-- Batch queue card -->
-          <section id="batch-queue" class="card hidden" aria-labelledby="queue-title">
-            <h3 class="card-title" id="queue-title">Processing Queue</h3>
-            <div id="queue-list" class="queue-list">
-              <!-- Queue items append here dynamically -->
+          <section
+            id="batch-queue"
+            class="source-panel queue-panel hidden"
+            aria-labelledby="queue-title"
+          >
+            <h2 class="panel-title" id="queue-title">Processing Queue</h2>
+            <div id="queue-list" class="queue-list" aria-live="polite">
+              <!-- Queue items append here dynamically. -->
             </div>
           </section>
         </aside>
 
-        <!-- Results view wrapper (Image previews and detailed reports) -->
-        <section class="results-container" aria-label="Results and Analysis">
-          <div
-            id="comparison-box"
-            class="comparison-grid"
-            role="region"
-            aria-label="Original and vector previews"
-          >
-            <article class="preview-card" aria-labelledby="original-preview-title">
-              <h3 id="original-preview-title" class="preview-title">Original</h3>
-              <div
-                id="pane-original"
-                class="comparison-pane pane-original"
-                aria-label="Original raster preview"
-              >
-                <div class="preview-placeholder">Upload an image to begin</div>
+        <!-- EditorCanvas -->
+        <section
+          id="preview-tune"
+          class="editor-canvas results-container"
+          aria-label="Preview and tuning canvas"
+        >
+          <div class="editor-card">
+            <div class="editor-card-header">
+              <div>
+                <p class="rail-kicker">Preview & Tune</p>
+                <h2>Editor Canvas</h2>
               </div>
-            </article>
-
-            <article class="preview-card" aria-labelledby="vector-preview-title">
-              <h3 id="vector-preview-title" class="preview-title">Vector</h3>
-              <div
-                id="pane-vector"
-                class="comparison-pane pane-vector"
-                aria-label="Vector result preview"
-              >
-                <div class="preview-placeholder">SVG will appear here</div>
+              <div class="editor-mini-stats" aria-label="Conversion summary">
+                <span><strong id="metric-paths">-</strong> paths</span>
+                <span><strong id="metric-colors">-</strong> colors</span>
+                <span id="metric-strategy-wrapper" class="hidden"><strong id="metric-strategy">-</strong></span>
               </div>
-            </article>
-          </div>
-
-          <!-- Zoom/Pan Toolbar -->
-          <div class="comparison-toolbar">
-            <div class="toolbar-group">
-              <button id="zoom-out-btn" type="button" title="Zoom Out">−</button>
-              <span class="zoom-val" id="zoom-val">100%</span>
-              <button id="zoom-in-btn" type="button" title="Zoom In">+</button>
-              <button id="zoom-reset-btn" type="button" title="Reset View zoom and pan">
-                Reset View
-              </button>
             </div>
-            <span style="font-size: 0.75rem; color: var(--text-muted); pointer-events: none"
-              >Drag canvas to Pan • Scroll to Zoom</span
+
+            <!-- PreviewCompare -->
+            <div
+              id="comparison-box"
+              class="comparison-grid preview-compare"
+              role="region"
+              aria-label="Original and vector previews"
             >
+              <article class="preview-card" aria-labelledby="original-preview-title">
+                <h2 id="original-preview-title" class="preview-title">Original</h2>
+
+                <div
+                  id="pane-original"
+                  class="comparison-pane pane-original"
+                  aria-label="Original raster preview"
+                >
+                  <div class="preview-placeholder">Your source image will appear here.</div>
+                </div>
+              </article>
+
+              <article class="preview-card" aria-labelledby="vector-preview-title">
+                <h2 id="vector-preview-title" class="preview-title">Vector</h2>
+
+                <div
+                  id="pane-vector"
+                  class="comparison-pane pane-vector"
+                  aria-label="Vector result preview"
+                >
+                  <div class="preview-placeholder">Your SVG result will appear here.</div>
+                </div>
+              </article>
+            </div>
+
+            <div class="comparison-toolbar" aria-label="Preview zoom and pan controls">
+              <div class="toolbar-group">
+                <button id="zoom-out-btn" type="button" aria-label="Zoom out" title="Zoom out">
+                  -
+                </button>
+                <span class="zoom-val" id="zoom-val" aria-live="polite">100%</span>
+                <button id="zoom-in-btn" type="button" aria-label="Zoom in" title="Zoom in">
+                  +
+                </button>
+                <button
+                  id="zoom-reset-btn"
+                  type="button"
+                  aria-label="Reset preview zoom and pan"
+                  title="Reset preview zoom and pan"
+                >
+                  Fit
+                </button>
+                <button
+                  id="preview-bg-toggle"
+                  type="button"
+                  aria-pressed="false"
+                  aria-label="Toggle vector preview background"
+                  title="Toggle vector preview background"
+                >
+                  Background
+                </button>
+              </div>
+
+              <span class="toolbar-hint">Drag canvas to pan - Scroll to zoom</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- InspectorRail -->
+        <aside
+          id="inspector-rail"
+          class="inspector-rail sidebar"
+          aria-label="Preset and tuning inspector"
+        >
+          <div class="rail-header">
+            <p class="rail-kicker">Inspector</p>
+            <h2 id="presets-title">Preset Rail</h2>
           </div>
 
-          <!-- Metric Details Panel -->
-          <section class="card" aria-labelledby="metrics-title">
-            <h3 class="card-title" id="metrics-title">Conversion Statistics</h3>
-            <div class="stats-grid">
-              <div class="stat-item">
-                <span class="stat-label">Original Size</span>
-                <span id="metric-original-size" class="stat-value">—</span>
+          <section
+            class="inspector-section active-preset-summary"
+            aria-labelledby="active-preset-title"
+          >
+            <h3 class="panel-title" id="active-preset-title">Active Preset</h3>
+            <div id="preset-guidance-box" class="preset-guidance-box hidden">
+              <div class="guidance-header">
+                <span class="guidance-badge">Why this preset?</span>
+                <span class="guidance-confidence">-</span>
               </div>
-              <div class="stat-item">
-                <span class="stat-label">SVG Size</span>
-                <span id="metric-svg-size" class="stat-value">—</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Compression</span>
-                <span id="metric-compression" class="stat-value">—</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Trace Time</span>
-                <span id="metric-time" class="stat-value">—</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Colors Detected</span>
-                <span id="metric-colors" class="stat-value">—</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Path Count</span>
-                <span id="metric-paths" class="stat-value">—</span>
+              <p class="guidance-text"></p>
+              <div class="guidance-tradeoffs">
+                <span class="tradeoff-item"></span>
               </div>
             </div>
           </section>
 
-          <!-- Export card -->
-          <section class="export-card card" aria-labelledby="export-card-title">
-            <div class="export-card-header">
-              <h3 class="card-title" id="export-card-title">Export</h3>
-              <p class="export-format-label">Scalable Vector Graphics (.svg)</p>
+          <section
+            class="inspector-section inspector-controls"
+            aria-label="Preset fidelity and optimization"
+          >
+            <div
+              id="fidelity-toggle"
+              class="fidelity-toggle hidden"
+              role="group"
+              aria-label="Tracing fidelity"
+            >
+              <span class="fidelity-label">Fidelity</span>
+              <div class="fidelity-buttons">
+                <button class="fidelity-btn" type="button" data-fidelity="clean">Clean</button>
+                <button class="fidelity-btn active" type="button" data-fidelity="balanced">
+                  Balanced
+                </button>
+                <button class="fidelity-btn" type="button" data-fidelity="high">Detailed</button>
+                <button class="fidelity-btn" type="button" data-fidelity="ultra">Ultra</button>
+              </div>
             </div>
-            <div class="export-empty-state">
+
+            <div
+              id="optimization-toggle"
+              class="optimization-toggle hidden"
+              role="group"
+              aria-label="SVG Optimization"
+            >
+              <span class="optimization-label">Optimize</span>
+              <div class="optimization-buttons">
+                <button class="optimization-btn" type="button" data-optimization="none">
+                  None
+                </button>
+                <button class="optimization-btn active" type="button" data-optimization="balanced">
+                  Balanced
+                </button>
+                <button class="optimization-btn" type="button" data-optimization="aggressive">
+                  Max
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="inspector-section presets-section" aria-labelledby="preset-list-title">
+            <h3 class="panel-title" id="preset-list-title">Presets</h3>
+            <div class="presets-grid" id="presets-container">
+              <button class="preset-card" type="button" data-preset="logo">
+                <span class="preset-card-icon">L</span>
+                <div class="preset-card-meta">
+                  <span class="preset-card-title">Logo</span>
+                  <span class="preset-card-desc">Flat filled shapes</span>
+                </div>
+              </button>
+              <button class="preset-card" type="button" data-preset="badge">
+                <span class="preset-card-icon">B</span>
+                <div class="preset-card-meta">
+                  <span class="preset-card-title">Badge / Emblem</span>
+                  <span class="preset-card-desc">Curved circular text</span>
+                </div>
+              </button>
+              <button class="preset-card" type="button" data-preset="photo">
+                <span class="preset-card-icon">P</span>
+                <div class="preset-card-meta">
+                  <span class="preset-card-title">Photo</span>
+                  <span class="preset-card-desc">Raster-backed wrap</span>
+                </div>
+              </button>
+              <button class="preset-card" type="button" data-preset="drawing">
+                <span class="preset-card-icon">D</span>
+                <div class="preset-card-meta">
+                  <span class="preset-card-title">Drawing</span>
+                  <span class="preset-card-desc">Simplified ink colors</span>
+                </div>
+              </button>
+              <button class="preset-card" type="button" data-preset="lineart">
+                <span class="preset-card-icon">I</span>
+                <div class="preset-card-meta">
+                  <span class="preset-card-title">Line Art</span>
+                  <span class="preset-card-desc">Stroked outlines</span>
+                </div>
+              </button>
+              <button class="preset-card" type="button" data-preset="complex">
+                <span class="preset-card-icon">C</span>
+                <div class="preset-card-meta">
+                  <span class="preset-card-title">Illustration</span>
+                  <span class="preset-card-desc">Detailed vector fields</span>
+                </div>
+              </button>
+              <button class="preset-card" type="button" data-preset="sticker">
+                <span class="preset-card-icon">S</span>
+                <div class="preset-card-meta">
+                  <span class="preset-card-title">Sticker Sheet</span>
+                  <span class="preset-card-desc">Clean border offsets</span>
+                </div>
+              </button>
+              <button class="preset-card" type="button" data-preset="pixelart">
+                <span class="preset-card-icon">X</span>
+                <div class="preset-card-meta">
+                  <span class="preset-card-title">Pixel Art</span>
+                  <span class="preset-card-desc">Hard-edged pixel grid</span>
+                </div>
+              </button>
+
+              <button
+                class="preset-card preset-save-card"
+                id="preset-save"
+                type="button"
+                title="Save active values as a new preset"
+              >
+                <span class="preset-card-icon">+</span>
+                <div class="preset-card-meta">
+                  <span class="preset-card-title">Save Custom</span>
+                  <span class="preset-card-desc">Lock active values</span>
+                </div>
+              </button>
+            </div>
+
+            <div id="custom-preset-actions" class="presets-container presets-container-custom">
+              <!-- Saved custom preset chips append here. -->
+            </div>
+
+            <div class="preset-select-group">
+              <label for="preset-select">Quick Select</label>
+              <select id="preset-select" class="preset-select">
+                <option value="">Load saved...</option>
+              </select>
+            </div>
+          </section>
+
+          <section class="inspector-section settings-card" aria-labelledby="settings-title">
+            <details id="advanced-settings-details">
+              <summary class="settings-summary">
+                <div class="settings-header-action">
+                  <h2 class="card-title" id="settings-title">
+                    Advanced Settings
+                    <span class="summary-arrow" aria-hidden="true">▸</span>
+                  </h2>
+                  <label
+                    class="high-quality-toggle"
+                    for="high-quality"
+                    onclick="event.stopPropagation()"
+                  >
+                    <input type="checkbox" id="high-quality" checked />
+                    <span>HQ Mode</span>
+                  </label>
+                </div>
+              </summary>
+
+              <div class="settings-content">
+                <div
+                  id="control-safety-note"
+                  class="control-safety-note"
+                  hidden
+                  aria-live="polite"
+                  aria-atomic="true"
+                ></div>
+
+                <div class="settings-list">
+                  <div class="setting-item">
+                    <label for="numberofcolors">
+                      <span class="label-text">
+                        Number of Colors
+                        <span
+                          class="tooltip-icon"
+                          data-tooltip="Total number of color clusters used in the output SVG vector."
+                          aria-hidden="true"
+                          >?</span
+                        >
+                      </span>
+                      <span class="setting-val" id="numberofcolors-value">4</span>
+                    </label>
+                    <input type="range" id="numberofcolors" min="2" max="32" value="4" />
+                  </div>
+
+                  <div class="setting-item">
+                    <label for="ltres">
+                      <span class="label-text">
+                        Line Smoothness
+                        <span
+                          class="tooltip-icon"
+                          data-tooltip="Linear interpolation threshold. Higher values produce smoother straight lines."
+                          aria-hidden="true"
+                          >?</span
+                        >
+                      </span>
+                      <span class="setting-val" id="ltres-value">8</span>
+                    </label>
+                    <input type="range" id="ltres" min="0" max="20" step="1" value="8" />
+                  </div>
+
+                  <div class="setting-item">
+                    <label for="qtres">
+                      <span class="label-text">
+                        Curve Smoothness
+                        <span
+                          class="tooltip-icon"
+                          data-tooltip="Quadratic spline interpolation threshold. Higher values produce smoother rounded corners."
+                          aria-hidden="true"
+                          >?</span
+                        >
+                      </span>
+                      <span class="setting-val" id="qtres-value">8</span>
+                    </label>
+                    <input type="range" id="qtres" min="0" max="20" step="1" value="8" />
+                  </div>
+
+                  <div class="setting-item">
+                    <label for="pathomit">
+                      <span class="label-text">
+                        Detail Filter
+                        <span
+                          class="tooltip-icon"
+                          data-tooltip="Removes path anchors smaller than this pixel area to reduce noise."
+                          aria-hidden="true"
+                          >?</span
+                        >
+                      </span>
+                      <span class="setting-val" id="pathomit-value">15</span>
+                    </label>
+                    <input type="range" id="pathomit" min="0" max="100" value="15" />
+                  </div>
+
+                  <div class="setting-item">
+                    <label for="blurradius">
+                      <span class="label-text">
+                        Edge Smoothing
+                        <span
+                          class="tooltip-icon"
+                          data-tooltip="Applies a Gaussian blur preprocessing pass to smooth high-contrast pixel edges."
+                          aria-hidden="true"
+                          >?</span
+                        >
+                      </span>
+                      <span class="setting-val" id="blurradius-value">0</span>
+                    </label>
+                    <input type="range" id="blurradius" min="0" max="20" step="1" value="0" />
+                  </div>
+
+                  <div class="setting-item">
+                    <label for="scale">
+                      <span class="label-text">
+                        Output Scale
+                        <span
+                          class="tooltip-icon"
+                          data-tooltip="Output scaling factor multiplier."
+                          aria-hidden="true"
+                          >?</span
+                        >
+                      </span>
+                      <span class="setting-val" id="scale-value">1.0</span>
+                    </label>
+                    <input type="range" id="scale" min="0.5" max="3.0" step="0.1" value="1.0" />
+                  </div>
+
+                  <div class="switch-container">
+                    <span class="label-text setting-toggle-label">
+                      Path Optimization
+                      <span
+                        class="tooltip-icon"
+                        data-tooltip="Merges continuous straight paths and redundant coordinate nodes."
+                        aria-hidden="true"
+                        >?</span
+                      >
+                    </span>
+
+                    <label class="switch" for="path-optimize">
+                      <input type="checkbox" id="path-optimize" checked />
+                      <span class="slider" aria-hidden="true"></span>
+                    </label>
+                  </div>
+
+                  <div class="switch-container">
+                    <span class="label-text setting-toggle-label">
+                      Outline Mode
+                      <span
+                        class="tooltip-icon"
+                        data-tooltip="Converts paths to stroked lines instead of solid color fills. Ideal for drawings."
+                        aria-hidden="true"
+                        >?</span
+                      >
+                    </span>
+
+                    <label class="switch" for="outline-mode">
+                      <input type="checkbox" id="outline-mode" checked />
+                      <span class="slider" aria-hidden="true"></span>
+                    </label>
+                  </div>
+
+                  <button id="preset-reset" class="btn btn-secondary btn-small" type="button">
+                    Reset Settings
+                  </button>
+                </div>
+              </div>
+            </details>
+          </section>
+        </aside>
+
+        <!-- ExportBar -->
+        <aside id="export-workspace" class="export-bar export-sidebar" aria-label="Export options">
+          <div
+            id="export-ready-state"
+            class="export-ready-state hidden"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <div class="export-ready-badge">Ready to export</div>
+            <p class="export-ready-note">This SVG was generated locally in your browser.</p>
+          </div>
+
+          <div class="export-status-group">
+            <span class="export-state-pill" id="export-state-pill">Locked</span>
+            <span class="export-format-label">Awaiting conversion</span>
+          </div>
+
+          <div class="export-intelligence" id="export-intelligence" aria-live="polite">
+            <div class="export-meta-grid sr-only" aria-label="Export metadata summary">
+              <span id="export-meta-format">-</span>
+              <span id="export-meta-paths">-</span>
+              <span id="export-meta-colors">-</span>
+              <span id="export-meta-engine">-</span>
+            </div>
+
+            <div class="export-size-compare" aria-label="File size comparison">
+              <div class="size-row">
+                <span>Original</span>
+                <strong id="export-size-original">-</strong>
+              </div>
+              <div class="size-row">
+                <span>SVG</span>
+                <strong id="export-size-svg">-</strong>
+              </div>
+              <div class="size-row">
+                <span>Optimized</span>
+                <strong id="export-size-optimized">-</strong>
+              </div>
+              <div class="size-row">
+                <span>Compression</span>
+                <strong id="metric-compression">-</strong>
+              </div>
+              <div class="size-meter" aria-hidden="true">
+                <span id="export-size-meter-fill"></span>
+              </div>
+            </div>
+
+            <!-- PaletteSwatches -->
+            <div class="export-palette-wrap">
+              <span class="export-section-label">Palette</span>
+              <div id="export-palette" class="export-palette" aria-label="Detected color palette">
+                <span class="palette-empty">No colors yet</span>
+              </div>
+            </div>
+
+            <!-- QualityChips -->
+            <div class="export-warning-wrap">
+              <span class="export-section-label">Quality</span>
+              <div id="export-warnings" class="export-warnings">
+                <div class="export-warning export-warning-muted">Run conversion</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="download-options" class="download-options">
+            <button
+              id="download-vector-btn"
+              class="btn btn-primary btn-export-primary"
+              type="button"
+              disabled
+            >
               <svg
-                class="export-empty-icon"
+                class="btn-icon"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -452,32 +781,52 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 aria-hidden="true"
+                focusable="false"
               >
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
               </svg>
-              <p>Convert an image to enable download.</p>
-            </div>
-            <div id="download-options" class="download-options hidden">
-              <button
-                id="download-vector-btn"
-                class="btn btn-primary btn-export-primary"
-                type="button"
-              >
-                <svg class="btn-icon" viewBox="0 0 24 24">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                </svg>
-                Download SVG
-              </button>
-              <button id="download-zip-btn" class="btn btn-secondary hidden" type="button">
-                <svg class="btn-icon" viewBox="0 0 24 24">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M12 17V3M8 12l4 5 4-5" />
-                </svg>
-                Export All as ZIP
-              </button>
-            </div>
-          </section>
-        </section>
-      </div>
+              Download SVG
+            </button>
+
+            <details class="export-secondary-actions">
+              <summary>More</summary>
+              <div class="secondary-action-list">
+                <button
+                  id="download-optimized-svg-btn"
+                  class="btn btn-secondary"
+                  type="button"
+                  disabled
+                >
+                  Optimized SVG
+                </button>
+
+                <button id="copy-svg-markup-btn" class="btn btn-secondary" type="button" disabled>
+                  Copy SVG markup
+                </button>
+
+                <button
+                  id="copy-react-component-btn"
+                  class="btn btn-secondary"
+                  type="button"
+                  disabled
+                >
+                  Copy React component
+                </button>
+
+                <button id="copy-data-uri-btn" class="btn btn-secondary" type="button" disabled>
+                  Copy inline data URI
+                </button>
+              </div>
+            </details>
+
+            <button id="download-zip-btn" class="btn btn-secondary hidden" type="button" disabled>
+              Export All as ZIP
+            </button>
+          </div>
+        </aside>
+      </section>
+
+      <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
     </main>
   </body>
 </html>

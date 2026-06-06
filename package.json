@@ -6,12 +6,24 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test:preset-contracts": "node scripts/test-preset-contracts.mjs",
+    "test:quantized-trace": "node scripts/test-quantized-trace.mjs",
+    "test:classifier": "node scripts/test-classifier.mjs",
+    "test:sticker-visual": "node scripts/test-sticker-visual-regression.mjs",
+    "test:presets-regression": "node scripts/test-presets-regression.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "pixelmatch": "7.2.0",
+    "pngjs": "7.0.0",
     "vite": "^8.0.16"
   },
   "dependencies": {
-    "imagetracerjs": "^1.2.6"
+    "culori": "4.0.2",
+    "imagetracerjs": "1.2.6",
+    "svg-pathdata": "8.0.0",
+    "svgo": "4.0.1",
+    "vtracer-wasm": "0.1.0"
   }
 }

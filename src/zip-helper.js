@@ -3,28 +3,24 @@
  * Avoids loading large external libraries.
  */
 
-// CRC32 table cache
-let crcTable = null;
-
 function makeCRCTable() {
   const table = new Int32Array(256);
   for (let i = 0; i < 256; i++) {
     let c = i;
     for (let j = 0; j < 8; j++) {
-      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
     }
     table[i] = c;
   }
   return table;
 }
 
+const CRC_TABLE = makeCRCTable();
+
 function crc32(uint8Array) {
-  if (!crcTable) {
-    crcTable = makeCRCTable();
-  }
   let crc = -1;
   for (let i = 0; i < uint8Array.length; i++) {
-    crc = (crc >>> 8) ^ crcTable[(crc ^ uint8Array[i]) & 0xFF];
+    crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ uint8Array[i]) & 0xff];
   }
   return (crc ^ -1) >>> 0;
 }
@@ -38,8 +34,8 @@ function getDosTime(date) {
   const minutes = date.getMinutes();
   const seconds = date.getSeconds();
 
-  const dosTime = ((hours << 11) | (minutes << 5) | (seconds >> 1)) & 0xFFFF;
-  const dosDate = (((year - 1980) << 9) | (month << 5) | day) & 0xFFFF;
+  const dosTime = ((hours << 11) | (minutes << 5) | (seconds >> 1)) & 0xffff;
+  const dosDate = (((year - 1980) << 9) | (month << 5) | day) & 0xffff;
 
   return { dosTime, dosDate };
 }
@@ -61,7 +57,8 @@ export function createZipBlob(files) {
   // 1. Process files and compile local headers + data
   for (const file of files) {
     const filenameBytes = textEncoder.encode(file.name);
-    const dataBytes = typeof file.content === 'string' ? textEncoder.encode(file.content) : file.content;
+    const dataBytes =
+      typeof file.content === "string" ? textEncoder.encode(file.content) : file.content;
     const fileCrc = crc32(dataBytes);
 
     // Local file header structure (30 bytes)
@@ -91,7 +88,7 @@ export function createZipBlob(files) {
       crc: fileCrc,
       length: dataBytes.length,
       offset,
-      parts
+      parts,
     });
   }
 
@@ -149,5 +146,5 @@ export function createZipBlob(files) {
   // End of Central Directory
   blobParts.push(new Uint8Array(eocd));
 
-  return new Blob(blobParts, { type: 'application/zip' });
+  return new Blob(blobParts, { type: "application/zip" });
 }
