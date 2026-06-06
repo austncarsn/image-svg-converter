@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600;700&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700&display=swap');
 
 /*
 ===========================================
@@ -133,7 +133,7 @@ making theme overrides a single-layer concern.
   --space-12: 48px;
 
   /* ----------------------------------------
-     LAYER 1 — typography
+     LAYER 1 — typography (scaled to semithin weights)
   ---------------------------------------- */
   --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display: "Outfit", "Plus Jakarta Sans", sans-serif;
@@ -147,11 +147,11 @@ making theme overrides a single-layer concern.
   --text-2xl: 2rem;
   --text-display: clamp(2.5rem, 6.5vw, 3.8rem);
 
-  --weight-light: 300;
-  --weight-regular: 400;
-  --weight-medium: 500;
-  --weight-semibold: 600;
-  --weight-bold: 700;
+  --weight-light: 200;
+  --weight-regular: 300;
+  --weight-medium: 400;
+  --weight-semibold: 500;
+  --weight-bold: 600;
 
   --leading-tight: 1.1;
   --leading-snug: 1.35;
@@ -266,13 +266,13 @@ making theme overrides a single-layer concern.
   --color-text-muted: #888888;
   --color-text-disabled: #555555;
 
-  --color-primary: #00e5ff;
-  /* Electric Blue */
-  --color-primary-hover: #33ebff;
-  --color-primary-active: #00b2c7;
-  --color-primary-soft: rgba(0, 229, 255, 0.12);
-  --color-primary-subtle: rgba(0, 229, 255, 0.06);
-  --color-primary-rgb: 0, 229, 255;
+  --color-primary: #ff3b30;
+  /* Sumi Crimson / Neon Red */
+  --color-primary-hover: #ff453a;
+  --color-primary-active: #d62f26;
+  --color-primary-soft: rgba(255, 59, 48, 0.12);
+  --color-primary-subtle: rgba(255, 59, 48, 0.06);
+  --color-primary-rgb: 255, 59, 48;
   --color-accent: var(--color-primary);
   --color-accent-hover: var(--color-primary-hover);
   --color-accent-active: var(--color-primary-active);
@@ -311,16 +311,16 @@ making theme overrides a single-layer concern.
 
   --page-ambient: none;
 
-  /* Premium design tokens (Dark theme - Japanese Black / Electric Blue) */
+  /* Premium design tokens (Dark theme - Japanese Black / Crimson) */
   --premium-bg-a: color-mix(in srgb, var(--color-primary) 8%, #080808);
   --premium-bg-b: color-mix(in srgb, #ffffff 2%, #080808);
   --premium-surface-a: #121212;
   --premium-surface-b: #0a0a0a;
   --premium-border: var(--color-border-strong);
   --premium-border-soft: var(--color-border-soft);
-  --premium-glow: 0 12px 40px rgba(0, 229, 255, 0.08);
+  --premium-glow: 0 12px 40px rgba(255, 59, 48, 0.08);
   --nav-laser: var(--color-primary);
-  --nav-laser-soft: rgba(0, 229, 255, 0.2);
+  --nav-laser-soft: rgba(255, 59, 48, 0.2);
 }
 
 /* Light theme ambient accentuation */
@@ -369,6 +369,7 @@ body {
   background-size: cover;
   color: var(--text-color);
   font-family: var(--font-sans);
+  font-weight: var(--weight-regular);
   font-size: 16px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;

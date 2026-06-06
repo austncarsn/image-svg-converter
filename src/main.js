@@ -698,6 +698,7 @@ import { createZipBlob } from "./zip-helper.js";
   function getPanelIdForNav(navId) {
     if (navId === "upload") return "source";
     if (navId === "preview") return "preview";
+    if (navId === "presets") return "presets";
     if (navId === "export") return "export";
     return "source";
   }
@@ -705,6 +706,7 @@ import { createZipBlob } from "./zip-helper.js";
   function getNavIdForPanel(panelId) {
     if (panelId === "source") return "upload";
     if (panelId === "preview") return "preview";
+    if (panelId === "presets") return "presets";
     if (panelId === "export") return "export";
     return "upload";
   }

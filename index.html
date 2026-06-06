@@ -55,10 +55,45 @@
         <nav class="top-nav" aria-label="Main navigation">
           <div class="nav-container">
             <a class="brand" href="#workspace-intake" aria-label="VectorStudio home">
-              <span>VectorStudio</span>
-            </a>
-
-            <div class="nav-actions">
+               <span>VectorStudio</span>
+             </a>
+ 
+             <div class="nav-sections">
+               <button
+                 class="header-nav-btn"
+                 type="button"
+                 data-nav-id="upload"
+                 data-nav-target="#workspace-intake"
+               >
+                 <span>Source</span>
+               </button>
+               <button
+                 class="header-nav-btn"
+                 type="button"
+                 data-nav-id="preview"
+                 data-nav-target="#preview-tune"
+               >
+                 <span>Preview</span>
+               </button>
+               <button
+                 class="header-nav-btn"
+                 type="button"
+                 data-nav-id="presets"
+                 data-nav-target="#inspector-rail"
+               >
+                 <span>Presets</span>
+               </button>
+               <button
+                 class="header-nav-btn"
+                 type="button"
+                 data-nav-id="export"
+                 data-nav-target="#export-workspace"
+               >
+                 <span>Export</span>
+               </button>
+             </div>
+ 
+             <div class="nav-actions">
               <button
                 id="theme-toggle"
                 class="theme-btn header-theme-btn"
