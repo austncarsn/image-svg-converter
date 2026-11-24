@@ -44,11 +44,6 @@ function isPositiveDimension(value) {
   return Number.isFinite(value) && value > 0;
 }
 
-function isTiffFile(file) {
-  const lowerName = file?.name?.toLowerCase?.() || "";
-  return file?.type === "image/tiff" || lowerName.endsWith(".tif") || lowerName.endsWith(".tiff");
-}
-
 function bytesToHex(bytes) {
   return Array.from(bytes)
     .map((byte) => byte.toString(16).toUpperCase().padStart(2, "0"))
@@ -148,19 +143,6 @@ export function loadImage(src) {
   });
 }
 
-export async function readFileIfTiff(file) {
-  if (!file || !isTiffFile(file)) return null;
-
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error(`Unable to read "${file.name}".`));
-
-    reader.readAsArrayBuffer(file);
-  });
-}
-
 export async function validateImageFile(file, config = {}) {
   assertBrowserImageApis();
 
@@ -175,25 +157,23 @@ export async function validateImageFile(file, config = {}) {
     );
   }
 
-  const header = await readFileHeader(file, 4);
+  const header = await readFileHeader(file, 12);
   const hex = bytesToHex(header);
-  const lowerName = file.name.toLowerCase();
+  const isWebP = hex.startsWith("52 49 46 46") && bytesToHex(header.subarray(8, 12)) === "57 45 42 50";
 
   const isPNG = hex.startsWith(SUPPORTED_SIGNATURES.png);
   const isJPG = hex.startsWith(SUPPORTED_SIGNATURES.jpg);
   const isBMP = hex.startsWith(SUPPORTED_SIGNATURES.bmp);
   const isTIFF =
     hex.startsWith(SUPPORTED_SIGNATURES.tiffLE) ||
-    hex.startsWith(SUPPORTED_SIGNATURES.tiffBE) ||
-    lowerName.endsWith(".tiff") ||
-    lowerName.endsWith(".tif");
+    hex.startsWith(SUPPORTED_SIGNATURES.tiffBE);
 
-  if (!isPNG && !isJPG && !isBMP && !isTIFF) {
+  if (!isPNG && !isJPG && !isBMP && !isWebP && !isTIFF) {
     throw new Error(`File "${file.name}" is not a supported format or is corrupt.`);
   }
 
   return {
-    type: isPNG ? "png" : isJPG ? "jpg" : isBMP ? "bmp" : "tiff",
+    type: isPNG ? "png" : isJPG ? "jpg" : isBMP ? "bmp" : isWebP ? "webp" : "tiff",
     size: file.size,
   };
 }
@@ -473,12 +453,25 @@ function canvasToWorkingDataURL(source, width, height, { removeBackground = true
   }
 }
 
-async function loadSourceFromFile(file, fileData) {
-  if (isTiffFile(file) && typeof window.Tiff === "function" && fileData) {
-    return {
-      source: new window.Tiff({ buffer: fileData }).toCanvas(),
-      sourceUrl: null,
-    };
+export async function loadSourceFromFile(file, type) {
+  if (type === "tiff") {
+    const { default: tiff } = await import("utif");
+    const buffer = await file.arrayBuffer();
+    const pages = tiff.decode(buffer);
+    const page = pages.find((entry) => entry.t256?.[0] && entry.t257?.[0]);
+    if (!page) throw new Error("TIFF contains no readable image.");
+    const width = page.t256[0];
+    const height = page.t257[0];
+    if (width * height > 32_000_000) {
+      throw new Error("TIFF exceeds the 32-megapixel decoding limit.");
+    }
+    tiff.decodeImage(buffer, page, pages);
+    const pixels = new Uint8ClampedArray(tiff.toRGBA8(page));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    getCanvasContext(canvas).putImageData(new ImageData(pixels, width, height), 0, 0);
+    return { source: canvas, sourceUrl: null };
   }
 
   const sourceUrl = URL.createObjectURL(file);
@@ -492,7 +485,7 @@ async function loadSourceFromFile(file, fileData) {
   }
 }
 
-function cleanupSource(source, sourceUrl) {
+export function cleanupSource(source, sourceUrl) {
   if (sourceUrl) {
     URL.revokeObjectURL(sourceUrl);
   }
@@ -509,47 +502,31 @@ function cleanupSource(source, sourceUrl) {
   }
 }
 
-export async function loadWorkingImage(file, fileData, options = {}) {
-  assertBrowserImageApis();
-
-  if (!file) throw new Error("No file selected.");
-
+export async function prepareWorkingImage(source, options = {}) {
   const { removeBackground = true } = options;
   const config = withDefaults(options.config);
+  const originalWidth = source.naturalWidth || source.width;
+  const originalHeight = source.naturalHeight || source.height;
 
-  let source = null;
-  let sourceUrl = null;
-
-  try {
-    const loaded = await loadSourceFromFile(file, fileData);
-    source = loaded.source;
-    sourceUrl = loaded.sourceUrl;
-
-    const originalWidth = source.naturalWidth || source.width;
-    const originalHeight = source.naturalHeight || source.height;
-
-    if (!isPositiveDimension(originalWidth) || !isPositiveDimension(originalHeight)) {
-      throw new Error("Loaded image has invalid dimensions.");
-    }
-
-    const working = canvasToWorkingDataURL(source, originalWidth, originalHeight, {
-      removeBackground,
-      config,
-    });
-
-    const img = await loadImage(working.dataUrl);
-
-    return {
-      img,
-      dataUrl: working.dataUrl,
-      originalWidth,
-      originalHeight,
-      workingWidth: working.width,
-      workingHeight: working.height,
-      downscaled: working.downscaled,
-      removedBackground: working.removedBackground,
-    };
-  } finally {
-    cleanupSource(source, sourceUrl);
+  if (!isPositiveDimension(originalWidth) || !isPositiveDimension(originalHeight)) {
+    throw new Error("Loaded image has invalid dimensions.");
   }
+
+  const working = canvasToWorkingDataURL(source, originalWidth, originalHeight, {
+    removeBackground,
+    config,
+  });
+
+  const img = await loadImage(working.dataUrl);
+
+  return {
+    img,
+    dataUrl: working.dataUrl,
+    originalWidth,
+    originalHeight,
+    workingWidth: working.width,
+    workingHeight: working.height,
+    downscaled: working.downscaled,
+    removedBackground: working.removedBackground,
+  };
 }

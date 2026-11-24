@@ -15,8 +15,9 @@ import {
   cleanupImage,
   getTracingImageData,
   loadImage,
-  loadWorkingImage,
-  readFileIfTiff,
+  loadSourceFromFile,
+  cleanupSource,
+  prepareWorkingImage,
   validateImageFile,
 } from "./image-prepare.js";
 import {
@@ -898,30 +899,6 @@ import { createZipBlob } from "./zip-helper.js";
       };
     } finally {
       cleanupCanvas(canvas);
-    }
-  }
-
-  // Classify the raw source before any preprocessing so background removal can
-  // be skipped for photo-like content (see BACKGROUND_REMOVAL_PROFILES).
-  async function detectSourceProfile(file, fileData) {
-    const lowerName = file.name.toLowerCase();
-    const isTIFF = lowerName.endsWith(".tif") || lowerName.endsWith(".tiff");
-    let source = null;
-    let sourceUrl = null;
-
-    try {
-      if (isTIFF && typeof window.Tiff === "function") {
-        const tiff = new window.Tiff({ buffer: fileData });
-        source = tiff.toCanvas();
-      } else {
-        sourceUrl = URL.createObjectURL(file);
-        source = await loadImage(sourceUrl);
-      }
-      return detectAssetProfileFromImage(source);
-    } finally {
-      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-      if (source instanceof HTMLImageElement) cleanupImage(source);
-      if (source instanceof HTMLCanvasElement) cleanupCanvas(source);
     }
   }
 
@@ -2772,37 +2749,26 @@ import { createZipBlob } from "./zip-helper.js";
 
   async function loadAndClassifyItem(item, jobToken) {
     updateDropZoneState("loading");
-    await validateImageFile(item.file, { maxFileSize: CONFIG.maxFileSize });
+    const { type } = await validateImageFile(item.file, { maxFileSize: CONFIG.maxFileSize });
     if (jobToken !== state.activeJobToken) return null;
 
-    const fileData = await readFileIfTiff(item.file);
-    if (jobToken !== state.activeJobToken) return null;
-
-    // Classify the raw source first so background removal can be skipped for
-    // photo-like images without re-decoding later.
-    if (!item.assetProfile) {
-      updateDropZoneState("analyzing");
-      const sourceProfile = await detectSourceProfile(item.file, fileData);
+    const { source, sourceUrl } = await loadSourceFromFile(item.file, type);
+    let workingImage;
+    try {
       if (jobToken !== state.activeJobToken) return null;
-      item.assetProfile = sourceProfile;
+      if (!item.assetProfile) {
+        updateDropZoneState("analyzing");
+        item.assetProfile = detectAssetProfileFromImage(source);
+      }
+      if (item.selectedPresetName) updateItemProfileForPreset(item, item.selectedPresetName);
+      updateDropZoneState("preparing");
+      workingImage = await prepareWorkingImage(source, {
+        removeBackground: BACKGROUND_REMOVAL_PROFILES.includes(item.assetProfile.type),
+        config: CONFIG,
+      });
+    } finally {
+      cleanupSource(source, sourceUrl);
     }
-
-    if (item.selectedPresetName) {
-      updateItemProfileForPreset(item, item.selectedPresetName);
-    }
-
-    const removeBackground = BACKGROUND_REMOVAL_PROFILES.includes(item.assetProfile.type);
-
-    updateDropZoneState("preparing");
-    const workingImage = await loadWorkingImage(item.file, fileData, {
-      removeBackground,
-      config: {
-        workingImageMaxDim: CONFIG.workingImageMaxDim,
-        backgroundSampleSize: CONFIG.backgroundSampleSize,
-        backgroundThreshold: CONFIG.backgroundThreshold,
-        maxFileSize: CONFIG.maxFileSize,
-      },
-    });
     if (jobToken !== state.activeJobToken) {
       cleanupImage(workingImage.img);
       return null;

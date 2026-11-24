@@ -10,7 +10,7 @@ An advanced, browser-based, high-fidelity raster-to-vector (SVG) conversion suit
 
 ## 🌟 Overview
 
-VectorStudio is a client-side vectorization engine that transforms PNG, JPG, BMP, TIFF, and WebP images into clean, scalable SVG paths. By combining Rust-powered `vtracer` compilation via WebAssembly with custom JS image processing filters, it delivers Illustrator-grade tracing results entirely in the browser. No images are uploaded to any server.
+VectorStudio is a client-side vectorization engine that transforms PNG, JPG, BMP, TIFF, and WebP images into clean, scalable SVG paths. By combining Rust-powered `vtracer` compilation via WebAssembly with custom JS image processing filters, it delivers Illustrator-grade tracing results entirely in the browser. No images are uploaded to any server. TIFF imports use the first image and support up to 32 megapixels.
 
 **Live Application:** [https://image-svg-converter-phi.vercel.app](https://image-svg-converter-phi.vercel.app)
 
