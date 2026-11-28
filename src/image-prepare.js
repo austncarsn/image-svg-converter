@@ -3,6 +3,8 @@ const DEFAULT_IMAGE_PREP_CONFIG = Object.freeze({
   backgroundSampleSize: 16,
   backgroundThreshold: 64,
   maxFileSize: 8 * 1024 * 1024,
+  maxDecodedPixels: 32_000_000,
+  maxDecodedDimension: 16_384,
 });
 
 const SUPPORTED_SIGNATURES = Object.freeze({
@@ -42,11 +44,6 @@ function formatBytes(bytes) {
 
 function isPositiveDimension(value) {
   return Number.isFinite(value) && value > 0;
-}
-
-function isTiffFile(file) {
-  const lowerName = file?.name?.toLowerCase?.() || "";
-  return file?.type === "image/tiff" || lowerName.endsWith(".tif") || lowerName.endsWith(".tiff");
 }
 
 function bytesToHex(bytes) {
@@ -148,19 +145,6 @@ export function loadImage(src) {
   });
 }
 
-export async function readFileIfTiff(file) {
-  if (!file || !isTiffFile(file)) return null;
-
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error(`Unable to read "${file.name}".`));
-
-    reader.readAsArrayBuffer(file);
-  });
-}
-
 export async function validateImageFile(file, config = {}) {
   assertBrowserImageApis();
 
@@ -175,25 +159,23 @@ export async function validateImageFile(file, config = {}) {
     );
   }
 
-  const header = await readFileHeader(file, 4);
+  const header = await readFileHeader(file, 12);
   const hex = bytesToHex(header);
-  const lowerName = file.name.toLowerCase();
+  const isWebP = hex.startsWith("52 49 46 46") && bytesToHex(header.subarray(8, 12)) === "57 45 42 50";
 
   const isPNG = hex.startsWith(SUPPORTED_SIGNATURES.png);
   const isJPG = hex.startsWith(SUPPORTED_SIGNATURES.jpg);
   const isBMP = hex.startsWith(SUPPORTED_SIGNATURES.bmp);
   const isTIFF =
     hex.startsWith(SUPPORTED_SIGNATURES.tiffLE) ||
-    hex.startsWith(SUPPORTED_SIGNATURES.tiffBE) ||
-    lowerName.endsWith(".tiff") ||
-    lowerName.endsWith(".tif");
+    hex.startsWith(SUPPORTED_SIGNATURES.tiffBE);
 
-  if (!isPNG && !isJPG && !isBMP && !isTIFF) {
+  if (!isPNG && !isJPG && !isBMP && !isWebP && !isTIFF) {
     throw new Error(`File "${file.name}" is not a supported format or is corrupt.`);
   }
 
   return {
-    type: isPNG ? "png" : isJPG ? "jpg" : isBMP ? "bmp" : "tiff",
+    type: isPNG ? "png" : isJPG ? "jpg" : isBMP ? "bmp" : isWebP ? "webp" : "tiff",
     size: file.size,
   };
 }
@@ -401,6 +383,13 @@ function removeConnectedBackground(canvas, ctx, config) {
 
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
+  // Existing alpha defines the background. Never flood-fill through transparent
+  // pixels into foreground pixels with the same RGB (notably black artwork).
+  // Preserve even partial alpha and existing padding; only opaque inputs
+  // participate in automatic background removal.
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 255) return { removedBackground: false, width, height };
+  }
   const bg = estimateBackgroundColor(data, width, height, config);
 
   const baseThreshold = Number.isFinite(config.backgroundThreshold)
@@ -473,26 +462,93 @@ function canvasToWorkingDataURL(source, width, height, { removeBackground = true
   }
 }
 
-async function loadSourceFromFile(file, fileData) {
-  if (isTiffFile(file) && typeof window.Tiff === "function" && fileData) {
-    return {
-      source: new window.Tiff({ buffer: fileData }).toCanvas(),
-      sourceUrl: null,
-    };
+export function validateDecodedDimensions(width, height, config = {}) {
+  const limits = withDefaults(config);
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) ||
+      width < 1 || height < 1) {
+    throw new Error("Decoded image has invalid dimensions.");
+  }
+  if (width > limits.maxDecodedDimension || height > limits.maxDecodedDimension ||
+      width * height > limits.maxDecodedPixels) {
+    throw new Error("Image exceeds the 32-megapixel or 16,384-pixel side decoding limit.");
+  }
+}
+
+function orientTiffCanvas(canvas, orientation) {
+  const width = canvas.width;
+  const height = canvas.height;
+  const transforms = {
+    2: [-1, 0, 0, 1, width, 0],
+    3: [-1, 0, 0, -1, width, height],
+    4: [1, 0, 0, -1, 0, height],
+    5: [0, 1, 1, 0, 0, 0],
+    6: [0, 1, -1, 0, height, 0],
+    7: [0, -1, -1, 0, height, width],
+    8: [0, -1, 1, 0, 0, width],
+  };
+  const transform = transforms[orientation];
+  if (!transform) return canvas;
+
+  const oriented = document.createElement("canvas");
+  oriented.width = orientation >= 5 ? height : width;
+  oriented.height = orientation >= 5 ? width : height;
+  try {
+    const ctx = getCanvasContext(oriented);
+    ctx.setTransform(...transform);
+    ctx.drawImage(canvas, 0, 0);
+    return oriented;
+  } catch (error) {
+    cleanupCanvas(oriented);
+    throw error;
+  } finally {
+    cleanupCanvas(canvas);
+  }
+}
+
+export async function loadSourceFromFile(file, type) {
+  if (type === "tiff") {
+    const { default: tiff } = await import("utif");
+    const buffer = await file.arrayBuffer();
+    const pages = tiff.decode(buffer);
+    const page = pages.find((entry) => entry.t256?.[0] && entry.t257?.[0]);
+    if (!page) throw new Error("TIFF contains no readable image.");
+    const width = page.t256[0];
+    const height = page.t257[0];
+    validateDecodedDimensions(width, height);
+    tiff.decodeImage(buffer, page, pages);
+    const rgba = tiff.toRGBA8(page);
+    if (!ArrayBuffer.isView(rgba) || rgba.byteLength !== width * height * 4) {
+      throw new Error("TIFF decoder returned an invalid pixel buffer.");
+    }
+    // Reuse the RGBA buffer rather than allocating a second full-size copy.
+    const pixels = new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, rgba.byteLength);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    try {
+      getCanvasContext(canvas).putImageData(new ImageData(pixels, width, height), 0, 0);
+      return { source: orientTiffCanvas(canvas, page.t274?.[0] || 1), sourceUrl: null };
+    } catch (error) {
+      cleanupCanvas(canvas);
+      throw error;
+    }
   }
 
   const sourceUrl = URL.createObjectURL(file);
-
+  let source = null;
   try {
-    const source = await loadImage(sourceUrl);
+    source = await loadImage(sourceUrl);
+    // Native formats have already been decoded by the browser at this point.
+    // Bound subsequent canvas allocations even for small compressed files.
+    validateDecodedDimensions(source.naturalWidth, source.naturalHeight);
     return { source, sourceUrl };
   } catch (error) {
-    URL.revokeObjectURL(sourceUrl);
+    cleanupSource(source, sourceUrl);
     throw error;
   }
 }
 
-function cleanupSource(source, sourceUrl) {
+export function cleanupSource(source, sourceUrl) {
   if (sourceUrl) {
     URL.revokeObjectURL(sourceUrl);
   }
@@ -509,47 +565,31 @@ function cleanupSource(source, sourceUrl) {
   }
 }
 
-export async function loadWorkingImage(file, fileData, options = {}) {
-  assertBrowserImageApis();
-
-  if (!file) throw new Error("No file selected.");
-
+export async function prepareWorkingImage(source, options = {}) {
   const { removeBackground = true } = options;
   const config = withDefaults(options.config);
+  const originalWidth = source.naturalWidth || source.width;
+  const originalHeight = source.naturalHeight || source.height;
 
-  let source = null;
-  let sourceUrl = null;
-
-  try {
-    const loaded = await loadSourceFromFile(file, fileData);
-    source = loaded.source;
-    sourceUrl = loaded.sourceUrl;
-
-    const originalWidth = source.naturalWidth || source.width;
-    const originalHeight = source.naturalHeight || source.height;
-
-    if (!isPositiveDimension(originalWidth) || !isPositiveDimension(originalHeight)) {
-      throw new Error("Loaded image has invalid dimensions.");
-    }
-
-    const working = canvasToWorkingDataURL(source, originalWidth, originalHeight, {
-      removeBackground,
-      config,
-    });
-
-    const img = await loadImage(working.dataUrl);
-
-    return {
-      img,
-      dataUrl: working.dataUrl,
-      originalWidth,
-      originalHeight,
-      workingWidth: working.width,
-      workingHeight: working.height,
-      downscaled: working.downscaled,
-      removedBackground: working.removedBackground,
-    };
-  } finally {
-    cleanupSource(source, sourceUrl);
+  if (!isPositiveDimension(originalWidth) || !isPositiveDimension(originalHeight)) {
+    throw new Error("Loaded image has invalid dimensions.");
   }
+
+  const working = canvasToWorkingDataURL(source, originalWidth, originalHeight, {
+    removeBackground,
+    config,
+  });
+
+  const img = await loadImage(working.dataUrl);
+
+  return {
+    img,
+    dataUrl: working.dataUrl,
+    originalWidth,
+    originalHeight,
+    workingWidth: working.width,
+    workingHeight: working.height,
+    downscaled: working.downscaled,
+    removedBackground: working.removedBackground,
+  };
 }

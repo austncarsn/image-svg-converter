@@ -1,0 +1,49 @@
+name: VectorStudio regression checks
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:preset-contracts
+      - run: npm run test:quantized-trace
+      - run: npm run test:classifier
+      - run: npm run test:sticker-visual
+      - run: npm run test:presets-regression
+
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - run: npm run build
+      - run: python -m pip install playwright==1.51.0 Pillow==11.3.0
+      - run: python -m playwright install --with-deps ${{ matrix.browser }}
+      - run: python scripts/test-browser.py ${{ matrix.browser }}

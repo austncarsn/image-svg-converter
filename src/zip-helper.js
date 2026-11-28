@@ -67,7 +67,7 @@ export function createZipBlob(files) {
 
     view.setUint32(0, 0x04034b50, true); // signature
     view.setUint16(4, 10, true); // version needed (1.0)
-    view.setUint16(6, 0, true); // general purpose bit flag
+    view.setUint16(6, 0x0800, true); // UTF-8 filenames
     view.setUint16(8, 0, true); // compression method (0 = store)
     view.setUint16(10, dosTime, true); // last mod time
     view.setUint16(12, dosDate, true); // last mod date
@@ -102,7 +102,7 @@ export function createZipBlob(files) {
     view.setUint32(0, 0x02014b50, true); // signature
     view.setUint16(4, 20, true); // version made by (2.0)
     view.setUint16(6, 10, true); // version needed (1.0)
-    view.setUint16(8, 0, true); // general purpose bit flag
+    view.setUint16(8, 0x0800, true); // UTF-8 filenames
     view.setUint16(10, 0, true); // compression method (0 = store)
     view.setUint16(12, dosTime, true); // last mod time
     view.setUint16(14, dosDate, true); // last mod date

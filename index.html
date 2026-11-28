@@ -6,7 +6,7 @@
 
     <meta
       name="description"
-      content="Convert PNG, JPEG, BMP, and TIFF images into stable SVG exports with automatic asset detection and browser-safe processing."
+      content="Convert PNG, JPEG, BMP, WebP, and TIFF images into stable SVG exports with automatic asset detection and browser-safe processing."
     />
     <meta name="theme-color" content="#F7F6F2" />
     <meta name="color-scheme" content="light dark" />
@@ -45,7 +45,6 @@
 
     <link rel="stylesheet" href="./src/style.css" />
 
-    <script src="https://cdn.jsdelivr.net/npm/tiff.js@0.4.0/dist/tiff.min.js" defer></script>
     <script type="module" src="./src/main.js" defer></script>
   </head>
 
@@ -111,7 +110,8 @@
       <input
         type="file"
         id="file-input"
-        accept="image/png,image/jpeg,image/bmp,image/tiff,image/tif"
+        accept="image/png,image/jpeg,image/bmp,image/webp,image/tiff,image/tif"
+        multiple
         hidden
       />
 
@@ -162,7 +162,7 @@
                 <div class="landing-drop-content">
                   <span class="landing-drop-title">Drop an image here</span>
                   <span id="landing-drop-hint" class="landing-drop-hint">
-                    PNG, JPEG, BMP, TIFF supported
+                    PNG, JPEG, BMP, WebP, TIFF supported
                   </span>
                   <span class="landing-drop-subhint">or click to browse</span>
                 </div>
@@ -302,7 +302,7 @@
             </svg>
 
             <span class="drop-text">Upload image</span>
-            <span id="drop-zone-hint" class="drop-hint">PNG, JPEG, BMP, TIFF</span>
+            <span id="drop-zone-hint" class="drop-hint">PNG, JPEG, BMP, WebP, TIFF</span>
             <span class="drop-status" aria-live="polite" aria-atomic="true"></span>
           </button>
 
@@ -360,7 +360,7 @@
                 <div
                   id="pane-original"
                   class="comparison-pane pane-original"
-                  aria-label="Original raster preview"
+                  aria-label="Original raster preview, scaled for display without background removal"
                 >
                   <div class="preview-placeholder">Your source image will appear here.</div>
                 </div>

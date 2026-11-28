@@ -10,7 +10,7 @@ An advanced, browser-based, high-fidelity raster-to-vector (SVG) conversion suit
 
 ## 🌟 Overview
 
-VectorStudio is a client-side vectorization engine that transforms PNG, JPG, BMP, TIFF, and WebP images into clean, scalable SVG paths. By combining Rust-powered `vtracer` compilation via WebAssembly with custom JS image processing filters, it delivers Illustrator-grade tracing results entirely in the browser. No images are uploaded to any server.
+VectorStudio is a client-side vectorization engine that transforms PNG, JPG, BMP, TIFF, and WebP images into clean, scalable SVG paths. By combining Rust-powered `vtracer` compilation via WebAssembly with custom JS image processing filters, it delivers Illustrator-grade tracing results entirely in the browser. No images are uploaded to any server. TIFF imports use the first image and honor orientation tags. Imports are limited to 8 MiB, 32 megapixels and 16,384 pixels per side; browser memory limits may be lower. Native formats are checked after browser decoding. The original preview preserves the uncropped image (scaled for display), and existing transparency is preserved during background preparation. Vector previews, SVG downloads, clipboard and ZIP exports use the same completed trace at a maximum working dimension of 2,048 pixels. Optimized SVG applies conservative non-geometric cleanup. Photo and raster-fallback modes embed raster data rather than editable vector paths.
 
 **Live Application:** [https://image-svg-converter-phi.vercel.app](https://image-svg-converter-phi.vercel.app)
 
@@ -97,7 +97,7 @@ image-svg-converter-main/
 ## ⚙️ Getting Started
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (version 18 or higher recommended)
+- [Node.js](https://nodejs.org/) (22.12 or higher in the Node 22 LTS line recommended; Vite also supports Node 20.19+ or newer compatible versions)
 
 ### 1. Installation
 Clone the repository and install dependencies:

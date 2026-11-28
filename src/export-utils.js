@@ -8,12 +8,9 @@ const SVGO_CONFIG = {
     { name: "removeComments" },
     { name: "removeEmptyAttrs" },
     { name: "removeEmptyContainers" },
-    { name: "removeHiddenElems" },
+    // Keep geometry and hidden layers intact: optimized export must not
+    // round coordinates or remove artwork that may be intentionally hidden.
     { name: "convertColors", params: { currentColor: false, shorthex: true, shortname: false } },
-    {
-      name: "convertPathData",
-      params: { floatPrecision: 2, leadingZero: true, negativeExtraSpace: true },
-    },
   ],
 };
 
@@ -34,12 +31,9 @@ export function optimizeSvgForExport(svgString) {
     const result = svgoOptimize(svgString, SVGO_CONFIG);
     return result.data || svgString;
   } catch {
-    return svgString
-      .replace(/<!--[\s\S]*?-->/g, "")
-      .replace(/>\s+</g, "><")
-      .replace(/\s{2,}/g, " ")
-      .replace(/\s+(\/?>)/g, "$1")
-      .trim();
+    // Never mutate text/attribute whitespace with regex after an optimizer
+    // error. The validated canonical document is the safe fallback.
+    return svgString;
   }
 }
 

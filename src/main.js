@@ -15,8 +15,9 @@ import {
   cleanupImage,
   getTracingImageData,
   loadImage,
-  loadWorkingImage,
-  readFileIfTiff,
+  loadSourceFromFile,
+  cleanupSource,
+  prepareWorkingImage,
   validateImageFile,
 } from "./image-prepare.js";
 import {
@@ -51,7 +52,6 @@ import { createZipBlob } from "./zip-helper.js";
     storageKey: "svg_converter_presets_v2",
     themeStorageKey: "theme-color-scheme",
     workingImageMaxDim: 2048,
-    previewTraceMaxDim: 960,
     backgroundSampleSize: 16,
     backgroundThreshold: 64,
     maxFileSize: 8 * 1024 * 1024,
@@ -91,6 +91,7 @@ import { createZipBlob } from "./zip-helper.js";
     currentFileIndex: -1,
     currentSvgString: "",
     currentImgElement: null,
+    currentOriginalImgElement: null,
     activePresetName: "logo",
     recommendedPresetName: null,
     activeJobToken: 0,
@@ -901,30 +902,6 @@ import { createZipBlob } from "./zip-helper.js";
     }
   }
 
-  // Classify the raw source before any preprocessing so background removal can
-  // be skipped for photo-like content (see BACKGROUND_REMOVAL_PROFILES).
-  async function detectSourceProfile(file, fileData) {
-    const lowerName = file.name.toLowerCase();
-    const isTIFF = lowerName.endsWith(".tif") || lowerName.endsWith(".tiff");
-    let source = null;
-    let sourceUrl = null;
-
-    try {
-      if (isTIFF && typeof window.Tiff === "function") {
-        const tiff = new window.Tiff({ buffer: fileData });
-        source = tiff.toCanvas();
-      } else {
-        sourceUrl = URL.createObjectURL(file);
-        source = await loadImage(sourceUrl);
-      }
-      return detectAssetProfileFromImage(source);
-    } finally {
-      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-      if (source instanceof HTMLImageElement) cleanupImage(source);
-      if (source instanceof HTMLCanvasElement) cleanupCanvas(source);
-    }
-  }
-
   function normalizeTraceConfig(input) {
     const merged = { ...PRESETS.default, ...input };
     return {
@@ -995,7 +972,7 @@ import { createZipBlob } from "./zip-helper.js";
     // Get ImageData from working image
     const isBadgeMode =
       config.id === "badge" || profile?.type === "badge" || profile?.subtype === "badge";
-    const maxDim = options.maxDim || (isBadgeMode ? 1024 : CONFIG.previewTraceMaxDim);
+    const maxDim = options.maxDim || CONFIG.workingImageMaxDim;
 
     // Fill white background for non-photo elements
     const sourceData = getTracingImageData(img, maxDim, false);
@@ -1020,7 +997,7 @@ import { createZipBlob } from "./zip-helper.js";
           ...SVG_META,
           profileType: config.id,
           optimizationMode: state.optimizationMode,
-          preserveBackground: Boolean(options.preserveBackground),
+          preserveBackground: shouldPreserveSourceBackground,
         }),
       stripWhiteBackground: stripWhiteBackgroundFromSvg,
       tightenSvgViewBoxToContent: tightenSvgViewBoxToContent,
@@ -1518,7 +1495,17 @@ import { createZipBlob } from "./zip-helper.js";
     return "ultra";
   }
 
+  function clearCurrentImages() {
+    clearTimeout(state.conversionDebounceId);
+    state.conversionDebounceId = 0;
+    cleanupImage(state.currentImgElement);
+    cleanupImage(state.currentOriginalImgElement);
+    state.currentImgElement = null;
+    state.currentOriginalImgElement = null;
+  }
+
   function renderOriginal(img) {
+    img.alt = "Original uploaded artwork, scaled for display without background removal";
     dom.originalPane.textContent = "";
     const wrapper = createEl("div", { className: "zoom-wrapper" });
     wrapper.appendChild(img);
@@ -2735,7 +2722,7 @@ import { createZipBlob } from "./zip-helper.js";
     );
   }
 
-  async function computeColors(imgEl) {
+  function computeColors(imgEl) {
     try {
       const maxSample = 120;
       const w = imgEl.naturalWidth || imgEl.width;
@@ -2772,46 +2759,51 @@ import { createZipBlob } from "./zip-helper.js";
 
   async function loadAndClassifyItem(item, jobToken) {
     updateDropZoneState("loading");
-    await validateImageFile(item.file, { maxFileSize: CONFIG.maxFileSize });
+    const { type } = await validateImageFile(item.file, { maxFileSize: CONFIG.maxFileSize });
     if (jobToken !== state.activeJobToken) return null;
 
-    const fileData = await readFileIfTiff(item.file);
-    if (jobToken !== state.activeJobToken) return null;
-
-    // Classify the raw source first so background removal can be skipped for
-    // photo-like images without re-decoding later.
-    if (!item.assetProfile) {
-      updateDropZoneState("analyzing");
-      const sourceProfile = await detectSourceProfile(item.file, fileData);
+    const { source, sourceUrl } = await loadSourceFromFile(item.file, type);
+    let workingImage;
+    let originalPreview;
+    try {
       if (jobToken !== state.activeJobToken) return null;
-      item.assetProfile = sourceProfile;
+      if (!item.assetProfile) {
+        updateDropZoneState("analyzing");
+        item.assetProfile = detectAssetProfileFromImage(source);
+      }
+      if (item.selectedPresetName) updateItemProfileForPreset(item, item.selectedPresetName);
+      updateDropZoneState("preparing");
+      workingImage = await prepareWorkingImage(source, {
+        removeBackground: BACKGROUND_REMOVAL_PROFILES.includes(item.assetProfile.type),
+        config: CONFIG,
+      });
+      // Keep a separate, uncropped original preview. Reuse the same PNG data
+      // when no preprocessing occurred, but never share the mutable IMG node.
+      if (jobToken !== state.activeJobToken) {
+        cleanupImage(workingImage.img);
+        return null;
+      }
+      originalPreview = workingImage.removedBackground
+        ? (await prepareWorkingImage(source, { removeBackground: false, config: CONFIG })).img
+        : await loadImage(workingImage.dataUrl);
+    } catch (error) {
+      cleanupImage(workingImage?.img);
+      cleanupImage(originalPreview);
+      throw error;
+    } finally {
+      cleanupSource(source, sourceUrl);
     }
-
-    if (item.selectedPresetName) {
-      updateItemProfileForPreset(item, item.selectedPresetName);
-    }
-
-    const removeBackground = BACKGROUND_REMOVAL_PROFILES.includes(item.assetProfile.type);
-
-    updateDropZoneState("preparing");
-    const workingImage = await loadWorkingImage(item.file, fileData, {
-      removeBackground,
-      config: {
-        workingImageMaxDim: CONFIG.workingImageMaxDim,
-        backgroundSampleSize: CONFIG.backgroundSampleSize,
-        backgroundThreshold: CONFIG.backgroundThreshold,
-        maxFileSize: CONFIG.maxFileSize,
-      },
-    });
     if (jobToken !== state.activeJobToken) {
       cleanupImage(workingImage.img);
+      cleanupImage(originalPreview);
       return null;
     }
 
-    if (state.currentImgElement) cleanupImage(state.currentImgElement);
+    clearCurrentImages();
     state.currentImgElement = workingImage.img;
+    state.currentOriginalImgElement = originalPreview;
 
-    renderOriginal(workingImage.img);
+    renderOriginal(originalPreview);
 
     Object.assign(item.assetProfile, {
       originalWidth: workingImage.originalWidth,
@@ -2858,7 +2850,7 @@ import { createZipBlob } from "./zip-helper.js";
       dataUrl: workingImage.dataUrl,
       width: workingImage.workingWidth,
       height: workingImage.workingHeight,
-      maxDim: 1024,
+      maxDim: CONFIG.workingImageMaxDim,
       optimizationMode: state.optimizationMode,
       // Bind the preset to this specific queue item so it is immune to UI
       // preset-card clicks that happen while the trace is in flight.
@@ -2870,6 +2862,9 @@ import { createZipBlob } from "./zip-helper.js";
 
   async function commitTraceResult(item, traced, start, imgElement) {
     const svgString = validateSvgString(traced.svgString, "Converted trace SVG");
+    if (traced.strategy !== "image-wrapper" && traced.strategy !== "image-wrapper-fallback") {
+      assertRealVectorSvg(svgString);
+    }
     item.traceDiagnostics = traced.diagnostics || null;
     item.exportStrategy = traced.strategy || item.exportStrategy;
     item.traceEngine = traced.engine;
@@ -2905,7 +2900,7 @@ import { createZipBlob } from "./zip-helper.js";
       item.exportStrategy === "image-wrapper-fallback"
     ) {
       item.paths = "N/A";
-      item.colors = imgElement ? await computeColors(imgElement) : 0;
+      item.colors = imgElement ? computeColors(imgElement) : 0;
     } else {
       item.paths = traced.pathCount;
       item.colors = traced.fillColorCount;
@@ -2933,6 +2928,8 @@ import { createZipBlob } from "./zip-helper.js";
     state.activeJobToken += 1;
     const jobToken = state.activeJobToken;
     state.currentFileIndex = index;
+    clearCurrentImages();
+    state.currentSvgString = "";
 
     const item = getCurrentItem();
     updateQueueUi();
@@ -2954,7 +2951,10 @@ import { createZipBlob } from "./zip-helper.js";
         updateMetrics(item);
         setAssetSummary(item.assetProfile, item);
         dom.downloadOptions?.classList.remove("hidden");
+        updateExportFormatState(item);
+        updateExportReadyState(true);
         updateExportConsole(item);
+        updateDropZoneState("complete");
         fitZoomToContent();
         return;
       }
@@ -2985,6 +2985,8 @@ import { createZipBlob } from "./zip-helper.js";
       );
     } catch (error) {
       if (jobToken !== state.activeJobToken) return;
+      clearCurrentImages();
+      state.currentSvgString = "";
       item.status = "error";
       item.errorMessage = error.message || "Unknown error.";
       updateQueueUi();
@@ -3015,42 +3017,9 @@ import { createZipBlob } from "./zip-helper.js";
   }
 
   async function showCompletedQueueItem(index) {
-    const item = state.queue[index];
-    if (!item?.svgString) return processQueueItem(index);
-
-    // Save job token before async call to avoid race condition!
-    state.activeJobToken += 1;
-    const jobToken = state.activeJobToken;
-
-    state.currentFileIndex = index;
-    state.currentSvgString = item.svgString;
-    updateQueueUi();
-
-    if (item.workingDataUrl) {
-      try {
-        const img = await loadImage(item.workingDataUrl);
-        if (jobToken !== state.activeJobToken) {
-          cleanupImage(img);
-          return;
-        }
-        if (state.currentImgElement) cleanupImage(state.currentImgElement);
-        state.currentImgElement = img;
-        renderOriginal(img);
-      } catch (error) {
-        console.warn("Completed original preview could not be restored:", error);
-      }
-    }
-
-    if (jobToken !== state.activeJobToken) return;
-
-    renderSvg(item.svgString);
-    updateMetrics(item);
-    setAssetSummary(item.assetProfile, item);
-    dom.downloadOptions?.classList.remove("hidden");
-    updateExportFormatState(item);
-    updateExportReadyState(true);
-    updateExportConsole(item);
-    fitZoomToContent();
+    // Re-decode only the selected original rather than retaining full-size
+    // original previews for every item in a batch. Completed SVGs stay cached.
+    return processQueueItem(index);
   }
 
   async function handleFiles(fileList) {
@@ -3060,6 +3029,7 @@ import { createZipBlob } from "./zip-helper.js";
     state.activeBatchToken += 1;
     state.activeJobToken += 1;
     state.isBatchRunning = false;
+    clearCurrentImages();
 
     const files = allFiles.slice(0, CONFIG.maxBatchFiles);
     if (allFiles.length > files.length) {
@@ -3110,10 +3080,7 @@ import { createZipBlob } from "./zip-helper.js";
     }
     const removed = state.queue.splice(index, 1)[0];
     if (removed && index === state.currentFileIndex) {
-      if (state.currentImgElement) {
-        cleanupImage(state.currentImgElement);
-        state.currentImgElement = null;
-      }
+      clearCurrentImages();
       state.currentSvgString = "";
       state.currentFileIndex = state.queue.length ? 0 : -1;
       setPlaceholder(dom.originalPane, "Your source image will appear here.");
@@ -3149,6 +3116,7 @@ import { createZipBlob } from "./zip-helper.js";
     const previousStatus = item.status;
     item.status = "processing";
     updateQueueUi();
+    updateExportConsole(item);
 
     dom.vectorPane.style.opacity = "0.6";
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -3161,7 +3129,7 @@ import { createZipBlob } from "./zip-helper.js";
         dataUrl: item.workingDataUrl,
         width: item.assetProfile.workingWidth,
         height: item.assetProfile.workingHeight,
-        maxDim: CONFIG.previewTraceMaxDim,
+        maxDim: CONFIG.workingImageMaxDim,
         context,
       });
 
@@ -3180,44 +3148,23 @@ import { createZipBlob } from "./zip-helper.js";
       console.warn("Retrace failed:", error);
       item.status = previousStatus;
       updateQueueUi();
+      updateExportConsole(item);
       showRetraceWarning(error.message || "Could not apply the new settings.");
     } finally {
       if (jobToken === state.activeJobToken) dom.vectorPane.style.opacity = "1";
     }
   }
 
-  async function getFullResolutionSvg() {
-    const item = getCurrentItem();
-
-    // Photo assets or fallen-back complex assets have no higher-resolution vector form;
-    // download the exact image-preserving wrapper that is already on screen.
-    if (
-      item?.exportStrategy === "image-wrapper" ||
-      item?.exportStrategy === "image-wrapper-fallback"
-    ) {
-      return item.svgString || state.currentSvgString;
+  function getCompletedSvg(item = getCurrentItem()) {
+    if (item?.status !== "completed" || !item.svgString) {
+      throw new Error("Wait for the current conversion to finish.");
     }
-
-    if (!state.currentImgElement) {
-      return state.currentSvgString;
+    const svg = validateSvgString(item.svgString, "Export SVG");
+    if (item.exportStrategy !== "image-wrapper" &&
+        item.exportStrategy !== "image-wrapper-fallback") {
+      assertRealVectorSvg(svg);
     }
-
-    try {
-      const context = resolveConversionContext(item);
-      const traced = await performVectorConversion(state.currentImgElement, item.assetProfile, {
-        dataUrl: item.workingDataUrl,
-        width: item.assetProfile.workingWidth,
-        height: item.assetProfile.workingHeight,
-        maxDim: CONFIG.workingImageMaxDim,
-        context,
-      });
-      if (traced.svgString) {
-        return traced.svgString;
-      }
-    } catch (error) {
-      console.warn("Full-res conversion failed, falling back to cached screen SVG:", error);
-    }
-    return item.svgString || state.currentSvgString;
+    return svg;
   }
 
   function triggerDownload(blob, filename) {
@@ -3234,6 +3181,7 @@ import { createZipBlob } from "./zip-helper.js";
     } catch (err) {
       console.error("Trigger download failed", err);
       if (url) URL.revokeObjectURL(url);
+      throw err;
     }
   }
 
@@ -3243,14 +3191,7 @@ import { createZipBlob } from "./zip-helper.js";
       if (!item) return;
       dom.downloadVectorBtn.disabled = true;
       try {
-        const svgString = await getFullResolutionSvg();
-        if (!svgString) return;
-        if (
-          item.exportStrategy === "quantized-path-trace" ||
-          item.exportStrategy === "quantized-path-trace-needs-refinement"
-        ) {
-          assertRealVectorSvg(svgString);
-        }
+        const svgString = getCompletedSvg(item);
         triggerDownload(
           new Blob([svgString], { type: "image/svg+xml" }),
           `${sanitizeFileName(item.file.name.replace(/\.[^/.]+$/, ""))}.svg`
@@ -3260,7 +3201,7 @@ import { createZipBlob } from "./zip-helper.js";
         console.warn("Download failed:", error);
         showToast("Export failed. Check the console for details.", "error");
       } finally {
-        dom.downloadVectorBtn.disabled = false;
+        dom.downloadVectorBtn.disabled = getCurrentItem()?.status !== "completed";
       }
     });
 
@@ -3269,9 +3210,9 @@ import { createZipBlob } from "./zip-helper.js";
       if (!item) return;
       dom.downloadOptimizedSvgBtn.disabled = true;
       try {
-        const svgString = await getFullResolutionSvg();
-        if (!svgString) return;
-        const optimizedSvg = optimizeSvgForExport(svgString);
+        const svgString = getCompletedSvg(item);
+        const optimizedSvg = validateSvgString(optimizeSvgForExport(svgString), "Optimized SVG");
+        if (!isRasterBackedSvg(svgString)) assertRealVectorSvg(optimizedSvg);
         triggerDownload(
           new Blob([optimizedSvg], { type: "image/svg+xml" }),
           `${sanitizeFileName(item.file.name.replace(/\.[^/.]+$/, ""))}.optimized.svg`
@@ -3281,26 +3222,29 @@ import { createZipBlob } from "./zip-helper.js";
         console.warn("Optimized download failed:", error);
         showToast("Optimized export failed. Check the console for details.", "error");
       } finally {
-        dom.downloadOptimizedSvgBtn.disabled = false;
+        dom.downloadOptimizedSvgBtn.disabled = getCurrentItem()?.status !== "completed";
       }
     });
 
     dom.copySvgMarkupBtn?.addEventListener("click", async () => {
       const item = getCurrentItem();
-      await copyTextToClipboard(item?.svgString || state.currentSvgString, "SVG markup copied.");
+      if (item?.status !== "completed") return;
+      await copyTextToClipboard(getCompletedSvg(item), "SVG markup copied.");
     });
 
     dom.copyReactComponentBtn?.addEventListener("click", async () => {
       const item = getCurrentItem();
       const baseName = sanitizeComponentName(item?.file?.name || "VectorArtwork");
-      const component = createReactComponent(item?.svgString || state.currentSvgString, baseName);
+      if (item?.status !== "completed") return;
+      const component = createReactComponent(getCompletedSvg(item), baseName);
       await copyTextToClipboard(component, "React component copied.");
     });
 
     dom.copyDataUriBtn?.addEventListener("click", async () => {
       const item = getCurrentItem();
+      if (item?.status !== "completed") return;
       await copyTextToClipboard(
-        createInlineDataUri(item?.svgString || state.currentSvgString),
+        createInlineDataUri(getCompletedSvg(item)),
         "Inline data URI copied."
       );
     });
@@ -3311,19 +3255,17 @@ import { createZipBlob } from "./zip-helper.js";
 
       try {
         const files = [];
+        const usedNames = new Set();
         for (let i = 0; i < complete.length; i++) {
           const item = complete[i];
           try {
-            if (
-              item.exportStrategy === "quantized-path-trace" ||
-              item.exportStrategy === "quantized-path-trace-needs-refinement"
-            ) {
-              assertRealVectorSvg(item.svgString);
-            }
-            files.push({
-              name: `${sanitizeFileName(item.file.name.replace(/\.[^/.]+$/, "") || `vector-${i}`)}.svg`,
-              content: item.svgString,
-            });
+            const content = getCompletedSvg(item);
+            const base = sanitizeFileName(item.file.name.replace(/\.[^/.]+$/, "") || `vector-${i}`);
+            let name = `${base}.svg`;
+            let suffix = 2;
+            while (usedNames.has(name.toLowerCase())) name = `${base}-${suffix++}.svg`;
+            usedNames.add(name.toLowerCase());
+            files.push({ name, content });
           } catch (itemErr) {
             throw new Error(`Validation failed for "${item.file.name}": ${itemErr.message}`);
           }
