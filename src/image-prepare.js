@@ -3,6 +3,8 @@ const DEFAULT_IMAGE_PREP_CONFIG = Object.freeze({
   backgroundSampleSize: 16,
   backgroundThreshold: 64,
   maxFileSize: 8 * 1024 * 1024,
+  maxDecodedPixels: 32_000_000,
+  maxDecodedDimension: 16_384,
 });
 
 const SUPPORTED_SIGNATURES = Object.freeze({
@@ -381,6 +383,13 @@ function removeConnectedBackground(canvas, ctx, config) {
 
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
+  // Existing alpha defines the background. Never flood-fill through transparent
+  // pixels into foreground pixels with the same RGB (notably black artwork).
+  // Preserve even partial alpha and existing padding; only opaque inputs
+  // participate in automatic background removal.
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 255) return { removedBackground: false, width, height };
+  }
   const bg = estimateBackgroundColor(data, width, height, config);
 
   const baseThreshold = Number.isFinite(config.backgroundThreshold)
@@ -453,6 +462,49 @@ function canvasToWorkingDataURL(source, width, height, { removeBackground = true
   }
 }
 
+export function validateDecodedDimensions(width, height, config = {}) {
+  const limits = withDefaults(config);
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) ||
+      width < 1 || height < 1) {
+    throw new Error("Decoded image has invalid dimensions.");
+  }
+  if (width > limits.maxDecodedDimension || height > limits.maxDecodedDimension ||
+      width * height > limits.maxDecodedPixels) {
+    throw new Error("Image exceeds the 32-megapixel or 16,384-pixel side decoding limit.");
+  }
+}
+
+function orientTiffCanvas(canvas, orientation) {
+  const width = canvas.width;
+  const height = canvas.height;
+  const transforms = {
+    2: [-1, 0, 0, 1, width, 0],
+    3: [-1, 0, 0, -1, width, height],
+    4: [1, 0, 0, -1, 0, height],
+    5: [0, 1, 1, 0, 0, 0],
+    6: [0, 1, -1, 0, height, 0],
+    7: [0, -1, -1, 0, height, width],
+    8: [0, -1, 1, 0, 0, width],
+  };
+  const transform = transforms[orientation];
+  if (!transform) return canvas;
+
+  const oriented = document.createElement("canvas");
+  oriented.width = orientation >= 5 ? height : width;
+  oriented.height = orientation >= 5 ? width : height;
+  try {
+    const ctx = getCanvasContext(oriented);
+    ctx.setTransform(...transform);
+    ctx.drawImage(canvas, 0, 0);
+    return oriented;
+  } catch (error) {
+    cleanupCanvas(oriented);
+    throw error;
+  } finally {
+    cleanupCanvas(canvas);
+  }
+}
+
 export async function loadSourceFromFile(file, type) {
   if (type === "tiff") {
     const { default: tiff } = await import("utif");
@@ -462,25 +514,36 @@ export async function loadSourceFromFile(file, type) {
     if (!page) throw new Error("TIFF contains no readable image.");
     const width = page.t256[0];
     const height = page.t257[0];
-    if (width * height > 32_000_000) {
-      throw new Error("TIFF exceeds the 32-megapixel decoding limit.");
-    }
+    validateDecodedDimensions(width, height);
     tiff.decodeImage(buffer, page, pages);
-    const pixels = new Uint8ClampedArray(tiff.toRGBA8(page));
+    const rgba = tiff.toRGBA8(page);
+    if (!ArrayBuffer.isView(rgba) || rgba.byteLength !== width * height * 4) {
+      throw new Error("TIFF decoder returned an invalid pixel buffer.");
+    }
+    // Reuse the RGBA buffer rather than allocating a second full-size copy.
+    const pixels = new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, rgba.byteLength);
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-    getCanvasContext(canvas).putImageData(new ImageData(pixels, width, height), 0, 0);
-    return { source: canvas, sourceUrl: null };
+    try {
+      getCanvasContext(canvas).putImageData(new ImageData(pixels, width, height), 0, 0);
+      return { source: orientTiffCanvas(canvas, page.t274?.[0] || 1), sourceUrl: null };
+    } catch (error) {
+      cleanupCanvas(canvas);
+      throw error;
+    }
   }
 
   const sourceUrl = URL.createObjectURL(file);
-
+  let source = null;
   try {
-    const source = await loadImage(sourceUrl);
+    source = await loadImage(sourceUrl);
+    // Native formats have already been decoded by the browser at this point.
+    // Bound subsequent canvas allocations even for small compressed files.
+    validateDecodedDimensions(source.naturalWidth, source.naturalHeight);
     return { source, sourceUrl };
   } catch (error) {
-    URL.revokeObjectURL(sourceUrl);
+    cleanupSource(source, sourceUrl);
     throw error;
   }
 }
